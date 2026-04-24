@@ -239,12 +239,44 @@ function renderEmailResult(data) {
         </div>
 
         <div class="result-card">
+            <div class="result-header"><i class="fa-solid fa-crosshairs"></i> Éléments d'Investigation Rapide</div>
+            <div class="result-body">
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">DOMAINE EXPÉDITEUR</span>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span class="stat-value font-mono" id="copyDomain">${eInfo.spf?.domain || eInfo.dkim?.domain || eInfo.dmarc?.domain || 'N/A'}</span>
+                            ${(eInfo.spf?.domain || eInfo.dkim?.domain || eInfo.dmarc?.domain) ? `<button class="btn btn-icon" onclick="copyToClipboard('${eInfo.spf?.domain || eInfo.dkim?.domain || eInfo.dmarc?.domain}')" title="Copier le domaine"><i class="fa-regular fa-copy"></i></button>` : ''}
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">ADRESSE IP SOURCE</span>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span class="stat-value font-mono" id="copyIp">${eInfo.spf?.ip || (data.ips && data.ips.length > 0 ? data.ips[0].ip : 'N/A')}</span>
+                            ${(eInfo.spf?.ip || (data.ips && data.ips.length > 0)) ? `<button class="btn btn-icon" onclick="copyToClipboard('${eInfo.spf?.ip || data.ips[0].ip}')" title="Copier l'IP"><i class="fa-regular fa-copy"></i></button>` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="result-card">
             <div class="result-header"><i class="fa-solid fa-shield-halved"></i> Vérifications de Sécurité</div>
             <div class="result-body">
                 <div class="stats-grid">
-                    ${buildSecurityBadge('SPF', eInfo.spf?.status, eInfo.spf?.record)}
-                    ${buildSecurityBadge('DKIM', eInfo.dkim?.status, eInfo.dkim?.domain)}
-                    ${buildSecurityBadge('DMARC', eInfo.dmarc?.status, eInfo.dmarc?.policy)}
+                    ${buildSecurityBadge('SPF', eInfo.spf?.status, 
+                        (eInfo.spf?.domain ? `Domaine: ${eInfo.spf.domain}<br>` : '') + 
+                        (eInfo.spf?.ip ? `IP: ${eInfo.spf.ip}<br>` : '') + 
+                        (eInfo.spf?.record || '')
+                    )}
+                    ${buildSecurityBadge('DKIM', eInfo.dkim?.status, 
+                        (eInfo.dkim?.domain ? `Domaine: ${eInfo.dkim.domain}<br>` : '') + 
+                        (eInfo.dkim?.algorithm ? `Algo: ${eInfo.dkim.algorithm}` : '')
+                    )}
+                    ${buildSecurityBadge('DMARC', eInfo.dmarc?.status, 
+                        (eInfo.dmarc?.domain ? `Domaine: ${eInfo.dmarc.domain}<br>` : '') + 
+                        (eInfo.dmarc?.policy ? `Politique: ${eInfo.dmarc.policy}` : '')
+                    )}
                 </div>
             </div>
         </div>
@@ -279,6 +311,15 @@ function renderEmailResult(data) {
 
     el.innerHTML = html;
     showToast('success', 'Analyse Terminée', 'Rapport généré avec succès');
+}
+
+function copyToClipboard(text) {
+    if(!text || text === 'N/A') return;
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('success', 'Copié !', `${text} copié dans le presse-papier`);
+    }).catch(err => {
+        showToast('error', 'Erreur', 'Impossible de copier');
+    });
 }
 
 function renderAttachmentResult(data) {

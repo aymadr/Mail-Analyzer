@@ -34,41 +34,113 @@ class EmailHeaderParser:
         }
     
     def _extract_spf(self, content: str) -> Dict:
-        """Extrait les informations SPF"""
-        spf_pattern = r"(?:Received-SPF|Authentication-Results).*?spf=(.*?)(?:;|$)"
-        match = re.search(spf_pattern, content, re.IGNORECASE | re.DOTALL)
-        
+        """Extrait les informations SPF, le domaine et l'IP"""
+        status = "Not found"
+        domain = None
+        ip = None
+
+        # 1. Vérification dans Received-SPF (ex: Received-SPF: pass (domain of example.com designates 192.168.1.1 as permitted sender) client-ip=192.168.1.1;)
+        received_spf_match = re.search(r"Received-SPF:\s*([a-zA-Z]+)(.*)", content, re.IGNORECASE)
+        if received_spf_match:
+            status = received_spf_match.group(1).capitalize()
+            line_content = received_spf_match.group(2)
+
+            # Essaie de trouver le client-ip ou IP (IPv4 ou IPv6)
+            ip_match = re.search(r"client-ip=([a-fA-F0-9\.:]+)", line_content, re.IGNORECASE)
+            if not ip_match:
+                ip_match = re.search(r"designates\s+([a-fA-F0-9\.:]+)\s+as permitted sender", line_content, re.IGNORECASE)
+            if ip_match:
+                ip = ip_match.group(1)
+
+            # Essaie de trouver le domaine (envelope-from ou domain of)
+            domain_match = re.search(r"envelope-from=[^\s@]*@([^\s;]+)", line_content, re.IGNORECASE)
+            if not domain_match:
+                domain_match = re.search(r"domain of ([^\s]+)\s+designates", line_content, re.IGNORECASE)
+            if domain_match:
+                domain = domain_match.group(1).lstrip(".*@")
+                
+        # 2. Sinon, vérification dans Authentication-Results
+        else:
+            auth_results_match = re.search(r"Authentication-Results:.*?spf=([a-zA-Z]+)(.*)", content, re.IGNORECASE | re.DOTALL)
+            if auth_results_match:
+                status = auth_results_match.group(1).capitalize()
+                rest = auth_results_match.group(2).split(';')[0] if ';' in auth_results_match.group(2) else auth_results_match.group(2)
+                
+                # IP dans Authentication-Results (IPv4 ou IPv6)
+                ip_match = re.search(r"sender IP is ([a-fA-F0-9\.:]+)", content, re.IGNORECASE)
+                if ip_match:
+                    ip = ip_match.group(1)
+                    
+                domain_match = re.search(r"smtp\.mailfrom=([^\s;]+)", content, re.IGNORECASE)
+                if domain_match:
+                    domain = domain_match.group(1)
+                    if "@" in domain:
+                        domain = domain.split("@")[-1]
+
         return {
-            "status": match.group(1).strip() if match else "Not found",
+            "status": status,
+            "domain": domain,
+            "ip": ip,
             "record": self._fetch_spf_record(content)
         }
     
     def _extract_dkim(self, content: str) -> Dict:
         """Extrait les informations DKIM"""
+        status = "Not found"
+        domain = None
+        
+        # On vérifie Authentication-Results pour un statut DKIM (ex: dkim=pass)
+        auth_results_match = re.search(r"Authentication-Results:.*?dkim=([a-zA-Z]+)", content, re.IGNORECASE | re.DOTALL)
+        if auth_results_match:
+            status = auth_results_match.group(1).capitalize()
+            
         dkim_pattern = r"DKIM-Signature:(.*?)(?=\n[A-Z]|\Z)"
         match = re.search(dkim_pattern, content, re.IGNORECASE | re.DOTALL)
         
+        if match and status == "Not found":
+            status = "Present"
+            
+        if match:
+            domain = self._extract_dkim_domain(match.group(1))
+            
         return {
-            "status": "Present" if match else "Not found",
-            "domain": self._extract_dkim_domain(match.group(1)) if match else None,
+            "status": status,
+            "domain": domain,
             "algorithm": self._extract_dkim_algo(match.group(1)) if match else None
         }
     
     def _extract_dmarc(self, content: str) -> Dict:
         """Extrait les informations DMARC"""
-        dmarc_pattern = r"Authentication-Results:.*?dmarc=(.*?)(?:;|$)"
-        match = re.search(dmarc_pattern, content, re.IGNORECASE)
+        dmarc_pattern = r"Authentication-Results:.*?dmarc=([a-zA-Z]+)(.*)(?:;|$)"
+        match = re.search(dmarc_pattern, content, re.IGNORECASE | re.DOTALL)
+        
+        status = "Not found"
+        domain = None
+        
+        if match:
+            status = match.group(1).capitalize()
+            # Trouve le domaine header.from (souvent indiqué en header.from=example.com)
+            domain_match = re.search(r"header\.from=([^\s;]+)", match.group(2), re.IGNORECASE)
+            if domain_match:
+                domain = domain_match.group(1)
         
         return {
-            "status": match.group(1).strip() if match else "Not found",
+            "status": status,
+            "domain": domain,
             "policy": self._extract_dmarc_policy(content)
         }
     
     def _extract_ips(self, content: str) -> List[str]:
-        """Extrait toutes les adresses IP"""
-        ip_pattern = r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
-        ips = re.findall(ip_pattern, content)
-        return list(set(ips))  # Remove duplicates
+        """Extrait toutes les adresses IP (IPv4 et IPv6)"""
+        # Regex pour IPv4
+        ipv4_pattern = r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b"
+        # Regex pour IPv6
+        ipv6_pattern = r"(?<![:.\w])(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}(?![:.\w])|(?<![:.\w])(?:[A-F0-9]{1,4}:)*::(?:[A-F0-9]{1,4}:)*[A-F0-9]{1,4}(?![:.\w])"
+        
+        ips = re.findall(f"{ipv4_pattern}|{ipv6_pattern}", content, re.IGNORECASE)
+        # re.findall retourne des strings pleines si pas de groupes, donc on nettoie
+        cleaned_ips = [ip for ip in ips if ip]
+        return list(set(cleaned_ips))  # Remove duplicates
     
     def _extract_domains(self, content: str) -> List[str]:
         """Extrait les domaines"""
