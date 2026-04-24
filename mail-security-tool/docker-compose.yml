@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  mail-analyzer:
+    build: .
+    container_name: mail-security-analyzer
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+    environment:
+      - FLASK_ENV=production
+      - DB_PATH=/app/data/results.db
+    env_file:
+      - .env
+    restart: unless-stopped
