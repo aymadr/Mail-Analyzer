@@ -1,88 +1,179 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mail Security Analyzer - Analyse de Sécurité Email</title>
+    <title>Mail Security Analyzer - SEC-OPS</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🔒 Mail Security Analyzer</h1>
-            <p>Analyse complète de sécurité email avec VirusTotal, URLScan.io et AbuseIPDB</p>
-        </header>
 
-        <nav class="tabs">
-            <button class="tab-button active" data-tab="email">Email</button>
-            <button class="tab-button" data-tab="attachment">Pièce Jointe</button>
-            <button class="tab-button" data-tab="url">URL</button>
-            <button class="tab-button" data-tab="ip">Adresse IP</button>
-            <button class="tab-button" data-tab="history">Historique</button>
-        </nav>
-
-        <!-- Email Analysis Tab -->
-        <div id="email" class="tab-content active">
-            <h2>Analyse Email</h2>
-            <form id="emailForm" class="form">
-                <div class="form-group">
-                    <label for="emailFile">Charger un fichier email (.eml)</label>
-                    <input type="file" id="emailFile" accept=".eml,.msg" required>
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="logo">
+                <i class="fa-solid fa-shield-halved"></i>
+                <span>SecAnalyzer<span class="version">v2</span></span>
+            </div>
+            
+            <nav class="nav-menu">
+                <button class="nav-item active" data-tab="email">
+                    <i class="fa-solid fa-envelope-open-text"></i>
+                    <span>Analyse Email</span>
+                </button>
+                <button class="nav-item" data-tab="attachment">
+                    <i class="fa-solid fa-file-shield"></i>
+                    <span>Pièce Jointe</span>
+                </button>
+                <button class="nav-item" data-tab="url">
+                    <i class="fa-solid fa-link"></i>
+                    <span>Analyse URL</span>
+                </button>
+                <button class="nav-item" data-tab="ip">
+                    <i class="fa-solid fa-server"></i>
+                    <span>Adresse IP</span>
+                </button>
+                
+                <div class="nav-divider"></div>
+                <div class="nav-header">LOGS & DONNÉES</div>
+                
+                <button class="nav-item" data-tab="history">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span>Historique</span>
+                </button>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <div class="api-status">
+                    <div class="status-dot"></div> APIs Connectées
                 </div>
-                <button type="submit" class="btn btn-primary">Analyser</button>
-            </form>
-            <div id="emailResult" class="result-container"></div>
-        </div>
+            </div>
+        </aside>
 
-        <!-- Attachment Analysis Tab -->
-        <div id="attachment" class="tab-content">
-            <h2>Analyse Pièce Jointe</h2>
-            <form id="attachmentForm" class="form">
-                <div class="form-group">
-                    <label for="attachmentFile">Charger un fichier</label>
-                    <input type="file" id="attachmentFile" required>
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header class="topbar">
+                <div class="page-title">
+                    <h1 id="active-tab-title">Inspecteur d'Email</h1>
+                    <p id="active-tab-desc">Parse automatiquement les en-têtes SPF, DKIM, DMARC et analyse les IPs</p>
                 </div>
-                <button type="submit" class="btn btn-primary">Analyser</button>
-            </form>
-            <div id="attachmentResult" class="result-container"></div>
-        </div>
-
-        <!-- URL Analysis Tab -->
-        <div id="url" class="tab-content">
-            <h2>Analyse URL</h2>
-            <form id="urlForm" class="form">
-                <div class="form-group">
-                    <label for="urlInput">Entrer une URL</label>
-                    <input type="url" id="urlInput" placeholder="https://example.com" required>
+                <div class="user-profile">
+                    <div class="avatar"><i class="fa-solid fa-user-astronaut"></i></div>
                 </div>
-                <button type="submit" class="btn btn-primary">Analyser</button>
-            </form>
-            <div id="urlResult" class="result-container"></div>
-        </div>
+            </header>
 
-        <!-- IP Analysis Tab -->
-        <div id="ip" class="tab-content">
-            <h2>Analyse Adresse IP</h2>
-            <form id="ipForm" class="form">
-                <div class="form-group">
-                    <label for="ipInput">Entrer une adresse IP</label>
-                    <input type="text" id="ipInput" placeholder="8.8.8.8" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" required>
-                </div>
-                <button type="submit" class="btn btn-primary">Analyser</button>
-            </form>
-            <div id="ipResult" class="result-container"></div>
-        </div>
+            <div class="content-wrapper">
+                
+                <!-- Tab: EMAIL -->
+                <section id="email" class="view-panel active fade-in">
+                    <div class="card glass-card">
+                        <form id="emailForm">
+                            <div class="upload-zone" id="emailDropZone">
+                                <i class="fa-solid fa-cloud-arrow-up text-4xl upload-icon"></i>
+                                <h3>Glisser-déposer un email</h3>
+                                <p>Fichiers supportés: .eml, .msg</p>
+                                <span class="or-separator">OU</span>
+                                <label for="emailFile" class="btn btn-outline">
+                                    <i class="fa-regular fa-folder-open"></i> Parcourir les fichiers
+                                </label>
+                                <input type="file" id="emailFile" accept=".eml,.msg" class="hidden-input" required>
+                                <div class="file-name" id="emailFileName"></div>
+                            </div>
+                            <div class="action-bar">
+                                <button type="submit" class="btn btn-primary btn-glow" id="emailBtn">
+                                    <i class="fa-solid fa-magnifying-glass"></i> Lancer l'Analyse
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    <div id="emailResult" class="results-area mt-4"></div>
+                </section>
 
-        <!-- History Tab -->
-        <div id="history" class="tab-content">
-            <h2>Historique des Analyses</h2>
-            <div id="historyList" class="history-list"></div>
-        </div>
+                <!-- Tab: ATTACHMENT -->
+                <section id="attachment" class="view-panel hidden">
+                    <div class="card glass-card">
+                        <form id="attachmentForm">
+                            <div class="upload-zone" id="attachDropZone">
+                                <i class="fa-solid fa-file-virus text-4xl upload-icon"></i>
+                                <h3>Glisser-déposer une pièce jointe</h3>
+                                <p>Calcule SHA256/MD5 et scanne sur VirusTotal</p>
+                                <span class="or-separator">OU</span>
+                                <label for="attachmentFile" class="btn btn-outline">
+                                    <i class="fa-regular fa-folder-open"></i> Parcourir
+                                </label>
+                                <input type="file" id="attachmentFile" class="hidden-input" required>
+                                <div class="file-name" id="attachFileName"></div>
+                            </div>
+                            <div class="action-bar">
+                                <button type="submit" class="btn btn-primary btn-glow" id="attachBtn">
+                                    <i class="fa-solid fa-magnifying-glass"></i> Lancer l'Analyse
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    <div id="attachmentResult" class="results-area mt-4"></div>
+                </section>
+
+                <!-- Tab: URL -->
+                <section id="url" class="view-panel hidden">
+                    <div class="card glass-card">
+                        <form id="urlForm" class="input-form">
+                            <div class="input-group">
+                                <label for="urlInput"><i class="fa-solid fa-globe"></i> URL à inspecter</label>
+                                <input type="url" id="urlInput" placeholder="https://site-suspect.com/login" class="text-input" required>
+                            </div>
+                            <div class="action-bar">
+                                <button type="submit" class="btn btn-primary btn-glow" id="urlBtn">
+                                    <i class="fa-solid fa-magnifying-glass"></i> Scanner l'URL
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    <div id="urlResult" class="results-area mt-4"></div>
+                </section>
+
+                <!-- Tab: IP -->
+                <section id="ip" class="view-panel hidden">
+                    <div class="card glass-card">
+                        <form id="ipForm" class="input-form">
+                            <div class="input-group">
+                                <label for="ipInput"><i class="fa-solid fa-network-wired"></i> Adresse IP cible</label>
+                                <input type="text" id="ipInput" placeholder="Ex: 8.8.8.8" class="text-input font-mono" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" required>
+                            </div>
+                            <div class="action-bar">
+                                <button type="submit" class="btn btn-primary btn-glow" id="ipBtn">
+                                    <i class="fa-solid fa-magnifying-glass"></i> Vérifier la réputation
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    <div id="ipResult" class="results-area mt-4"></div>
+                </section>
+
+                <!-- Tab: HISTORY -->
+                <section id="history" class="view-panel hidden">
+                    <div class="card glass-card p-0">
+                        <div class="history-header">
+                            <h3><i class="fa-solid fa-book-journal-whills"></i> Dernières analyses</h2>
+                            <button class="btn btn-icon" onclick="loadHistory()"><i class="fa-solid fa-rotate-right"></i></button>
+                        </div>
+                        <div id="historyList" class="history-list"></div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
     </div>
 
-    <footer>
-        <p>Mail Security Analyzer &copy; 2026 | Données provenant de VirusTotal, URLScan.io et AbuseIPDB</p>
-    </footer>
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="toast-container"></div>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>

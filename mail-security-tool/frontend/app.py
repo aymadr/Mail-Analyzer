@@ -1,10 +1,15 @@
 """
 Interface Flask - API REST et Web
 """
+import sys
+from pathlib import Path
+
+# Ajouter le backend au path Python
+sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
+
 from flask import Flask, render_template, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 import os
-from pathlib import Path
 from analyzer import SecurityAnalyzer
 
 app = Flask(__name__)
