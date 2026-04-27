@@ -1,6 +1,6 @@
 # Mail Security Analyzer 🔒
 
-Outil d'analyse de sécurité email centralisé intégrant VirusTotal, URLScan.io et AbuseIPDB.
+Outil d'analyse de sécurité email centralisé intégrant VirusTotal, URLScan.io, AbuseIPDB et Scamdoc (ScamPredictor via RapidAPI).
 
 ## 🎯 Fonctionnalités
 
@@ -8,8 +8,9 @@ Outil d'analyse de sécurité email centralisé intégrant VirusTotal, URLScan.i
 - ✅ **Extraction d'informations** : IPs, domaines, en-têtes
 - ✅ **Calcul de hash** : MD5, SHA1, SHA256
 - ✅ **Analyse de pièces jointes** : Vérification VirusTotal
-- ✅ **Analyse d'URLs** : Vérification VirusTotal + URLScan.io
+- ✅ **Analyse d'URLs** : Vérification VirusTotal + URLScan.io + Scamdoc
 - ✅ **Analyse d'IPs** : VirusTotal + AbuseIPDB
+- ✅ **Scoring Scamdoc** : Trust Score et Risk Score pour domaines/URLs
 - ✅ **Base de données** : Cache local SQLite
 - ✅ **Interface web** : Dashboard moderne et intuitif
 
@@ -21,7 +22,7 @@ mail-security-tool/
 │   ├── config.py              # Configuration centralisée
 │   ├── email_parser.py        # Parser d'entête email
 │   ├── hash_calculator.py     # Calcul de hash
-│   ├── api_clients.py         # Clients API (VT, URLScan, AbuseIPDB)
+│   ├── api_clients.py         # Clients API (VT, URLScan, AbuseIPDB, Scamdoc)
 │   ├── database.py            # Gestion SQLite
 │   └── analyzer.py            # Orchestrateur principal
 ├── frontend/
@@ -65,12 +66,13 @@ mail-security-tool/
 
 4. **Configurer les clés API**
    - Éditer le fichier `.env`
-   - Ajouter tes clés API VirusTotal, URLScan.io, AbuseIPDB
+   - Ajouter tes clés API VirusTotal, URLScan.io, AbuseIPDB, Scamdoc (RapidAPI)
 
    **Obtenir les clés API :**
    - [VirusTotal](https://www.virustotal.com/gui/home/upload)
    - [URLScan.io](https://urlscan.io/)
    - [AbuseIPDB](https://www.abuseipdb.com/)
+   - [ScamPredictor (RapidAPI)](https://rapidapi.com/)
 
 5. **Lancer l'application**
    ```bash
@@ -102,7 +104,8 @@ Le stack Docker du projet:
 - Le système parse automatiquement:
   - En-têtes SPF, DKIM, DMARC
   - IPs et domaines
-  - Vérifie les IPs sur VirusTotal et AbuseIPDB
+   - Vérifie les IPs sur VirusTotal et AbuseIPDB
+   - Vérifie les domaines/URLs extraits via Scamdoc
 
 #### Analyse des Routages (IPs)
 Dans le rapport d'analyse email, la section **Analyse des Routages (IPs)** affiche le chemin technique du message à partir des en-têtes mail.
@@ -125,8 +128,8 @@ Note: ce n'est pas un traceroute réseau en direct. L'analyse est basée sur les
 
 ### 3. Analyse d'URL
 - Entrer une URL
-- Analyse via VirusTotal et URLScan.io
-- Affiche le verdict et les détails
+- Analyse via VirusTotal, URLScan.io et Scamdoc
+- Affiche le verdict et les détails (dont Trust Score et Risk Score Scamdoc)
 
 ### 4. Analyse d'IP
 - Entrer une adresse IP
@@ -153,6 +156,7 @@ DB_PATH = "chemin/vers/ma/bdd.db"
 VIRUSTOTAL_RATE_LIMIT = 4    # 4 req/min
 URLSCAN_RATE_LIMIT = 1       # 1 req/s
 ABUSEIPDB_RATE_LIMIT = 1     # 1 req/s
+SCAMDOC_RATE_LIMIT = 1       # 1 req/s
 ```
 
 ## 📝 API Endpoints

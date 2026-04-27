@@ -3,16 +3,18 @@ Orchestrateur principal - Coordonne toutes les analyses
 """
 import hashlib
 import ipaddress
+import re
 import requests
 from urllib.parse import urlparse
 from email_parser import EmailHeaderParser
 from hash_calculator import HashCalculator
-from api_clients import VirusTotalClient, URLScanIOClient, AbuseIPDBClient
+from api_clients import VirusTotalClient, URLScanIOClient, AbuseIPDBClient, ScamdocClient
 from database import Database
 from typing import Dict, List
 
 class SecurityAnalyzer:
     MAX_EMAIL_URL_REDIRECTS = 25
+    MAX_EMAIL_URL_SCAMDOC = 10
 
     def __init__(self):
         self.email_parser = EmailHeaderParser()
@@ -20,6 +22,7 @@ class SecurityAnalyzer:
         self.vt_client = VirusTotalClient()
         self.urlscan_client = URLScanIOClient()
         self.abuseipdb_client = AbuseIPDBClient()
+        self.scamdoc_client = ScamdocClient()
         self.db = Database()
     
     def analyze_email_file(self, file_path: str) -> Dict:
@@ -65,6 +68,7 @@ class SecurityAnalyzer:
 
         # Analyse locale des URLs extraites du mail (normalisation + redirections)
         url_results = self._analyze_email_urls(email_data.get("urls", {}))
+        scamdoc_results = self._analyze_email_scamdoc(email_data, url_results)
         
         # Compile les résultats
         full_analysis = {
@@ -72,6 +76,7 @@ class SecurityAnalyzer:
             "ips": ip_results,
             "attachments": attachment_results,
             "urls": url_results,
+            "scamdoc": scamdoc_results,
             "hash": email_hash
         }
         
@@ -111,7 +116,8 @@ class SecurityAnalyzer:
         results = {
             "url": normalized_url,
             "virustotal": self.vt_client.check_url(normalized_url),
-            "urlscan": self.urlscan_client.scan_url(normalized_url)
+            "urlscan": self.urlscan_client.scan_url(normalized_url),
+            "scamdoc": self.scamdoc_client.check_url(normalized_url)
         }
         
         self.db.save_url_analysis(normalized_url, results)
@@ -236,6 +242,84 @@ class SecurityAnalyzer:
                     "chain": [url],
                     "error": str(e),
                 }
+
+    def _analyze_email_scamdoc(self, email_data: Dict, url_results: Dict) -> Dict:
+        """Analyse Scamdoc pour les éléments clés d'un email."""
+        sender_value = email_data.get("from", "")
+        sender_email = self._extract_first_email(sender_value)
+        recipient_email = self._extract_first_email(email_data.get("to", ""))
+
+        sender_domain = self._extract_domain_from_email(sender_email)
+        if sender_domain and not self._is_local_email_domain(sender_domain):
+            sender_result = self.scamdoc_client.check_url(f"https://{sender_domain}")
+        elif sender_domain:
+            sender_result = {
+                "source": "Scamdoc",
+                "error": "Sender domain is local/internal and is skipped",
+            }
+        else:
+            sender_result = {
+                "source": "Scamdoc",
+                "error": "Sender email/domain not found",
+            }
+
+        # Selon la demande, on n'analyse pas le destinataire via Scamdoc.
+        recipient_result = {
+            "source": "Scamdoc",
+            "error": "Recipient Scamdoc check disabled (sender-focused mode)",
+        }
+
+        url_checks = []
+        extracted = url_results.get("extracted", [])
+        unique_urls = []
+        seen = set()
+        for item in extracted:
+            normalized = item.get("normalized")
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            unique_urls.append(normalized)
+
+        for value in unique_urls[: self.MAX_EMAIL_URL_SCAMDOC]:
+            url_checks.append({
+                "url": value,
+                "result": self.scamdoc_client.check_url(value)
+            })
+
+        return {
+            "sender_email": sender_email,
+            "sender_domain": sender_domain,
+            "sender": sender_result,
+            "recipient_email": recipient_email,
+            "recipient": recipient_result,
+            "urls": url_checks,
+            "summary": {
+                "checked_urls": len(url_checks),
+                "limited": len(unique_urls) > self.MAX_EMAIL_URL_SCAMDOC,
+            }
+        }
+
+    @staticmethod
+    def _extract_first_email(value: str) -> str:
+        if not value:
+            return ""
+        match = re.search(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", value)
+        return match.group(0).lower() if match else ""
+
+    @staticmethod
+    def _extract_domain_from_email(email_value: str) -> str:
+        if not email_value or "@" not in email_value:
+            return ""
+        return email_value.split("@", 1)[1].lower().strip()
+
+    @staticmethod
+    def _is_local_email_domain(domain: str) -> bool:
+        lowered = (domain or "").lower().strip()
+        if not lowered:
+            return True
+        if lowered.endswith(".local") or lowered.endswith(".lan"):
+            return True
+        return False
 
     @staticmethod
     def _is_private_or_local_host(hostname: str) -> bool:

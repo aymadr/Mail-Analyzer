@@ -7,7 +7,7 @@ const tabConfig = {
     dashboard: { title: "Dashboard Sécurité", desc: "Rapport synthétique des analyses et indicateurs clés" },
     email: { title: "Inspecteur d'Email", desc: "Parse automatiquement les en-têtes SPF, DKIM, DMARC et analyse les IPs" },
     attachment: { title: "Sandbox Pièce Jointe", desc: "Calcul de Hash (SHA256, MD5) & Vérification Virustotal" },
-    url: { title: "Scanner d'URL", desc: "Vérification réputation VirusTotal et empreinte URLScan" },
+    url: { title: "Scanner d'URL", desc: "Vérification réputation VirusTotal, Scamdoc et empreinte URLScan" },
     ip: { title: "Threat Intel IP", desc: "Consultation croisée VirusTotal & AbuseIPDB" },
     history: { title: "Historique & Logs", desc: "Archives des analyses enregistrées dans la DB locale" }
 };
@@ -285,10 +285,7 @@ async function loadDashboard() {
 function renderEmailResult(data) {
     const el = document.getElementById('emailResult');
     const eInfo = data.email || {};
-    const recipientValue = eInfo.to || (eInfo.to_detected && eInfo.to_detected.length > 0 ? eInfo.to_detected[0] : 'N/A');
-    const recipientSource = eInfo.to_source || 'N/A';
     const senderContact = parseEmailContact(eInfo.from || '');
-    const recipientContact = parseEmailContact(recipientValue || '');
     
     let html = `
         <div class="result-card">
@@ -296,7 +293,6 @@ function renderEmailResult(data) {
             <div class="result-body">
                 <div class="stats-grid">
                     <div class="stat-item"><span class="stat-label">EXPÉDITEUR</span><span class="stat-value">${senderContact.name || 'N/A'}</span><div class="text-sm text-muted" style="margin-top:6px; word-break:break-all;">${senderContact.email || 'Email non trouvé'}</div></div>
-                    <div class="stat-item"><span class="stat-label">DESTINATAIRE</span><span class="stat-value">${recipientContact.name || 'N/A'}</span><div class="text-sm text-muted" style="margin-top:6px; word-break:break-all;">${recipientContact.email || 'Email non trouvé'}</div><div class="text-sm text-muted" style="margin-top:6px;">Source: ${recipientSource}</div></div>
                     <div class="stat-item"><span class="stat-label">DATE</span><span class="stat-value">${eInfo.date || 'N/A'}</span></div>
                     <div class="stat-item"><span class="stat-label">SUJET</span><span class="stat-value">${eInfo.subject || 'N/A'}</span></div>
                 </div>
@@ -346,6 +342,40 @@ function renderEmailResult(data) {
             </div>
         </div>
     `;
+
+    if (data.scamdoc) {
+        const scamdoc = data.scamdoc || {};
+        const senderResult = scamdoc.sender || {};
+        const scamUrls = scamdoc.urls || [];
+
+        html += `<div class="result-card">
+            <div class="result-header"><i class="fa-solid fa-user-secret"></i> Scamdoc / ScamPredictor</div>
+            <div class="result-body">
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">EXPÉDITEUR</span>
+                        <div class="text-sm text-muted" style="margin-bottom:8px; word-break:break-all;">${scamdoc.sender_email || 'N/A'}</div>
+                        ${buildScamdocBox(senderResult)}
+                    </div>
+                </div>
+            </div>
+        </div>`;
+
+        if (scamUrls.length > 0) {
+            html += `<details class="result-card result-collapsible">
+                <summary class="result-header"><i class="fa-solid fa-user-secret"></i> Scamdoc sur URLs extraites</summary>
+                <div class="result-body">`;
+
+            scamUrls.forEach(entry => {
+                html += `<div class="stat-item" style="margin-bottom:12px;">
+                    <div class="text-sm text-muted" style="word-break:break-all; margin-bottom:8px;">${entry.url || 'N/A'}</div>
+                    ${buildScamdocBox(entry.result || {})}
+                </div>`;
+            });
+
+            html += `</div></details>`;
+        }
+    }
 
     if(data.urls && data.urls.extracted && data.urls.extracted.length > 0) {
         const urlSummary = data.urls.summary || {};
@@ -682,6 +712,13 @@ function renderUrlResult(data) {
         html += `</div>`;
     }
 
+    // Scamdoc / ScamPredictor
+    if(data.scamdoc) {
+        html += `<div class="stat-item"><span class="stat-label"><i class="fa-solid fa-user-secret"></i> Scamdoc</span>`;
+        html += buildScamdocBox(data.scamdoc);
+        html += `</div>`;
+    }
+
     html += `</div></div></div>`;
     el.innerHTML = html;
     showToast('success', 'URL Scannée', 'Informations récupérées');
@@ -827,6 +864,40 @@ function buildVerdictBox(verdict, statsHtml) {
             <i class="fa-solid ${icon} verdict-icon"></i>
             <h3 style="margin-bottom:10px; font-family:var(--font-heading);">${verdict}</h3>
             ${statsHtml}
+        </div>
+    `;
+}
+
+function buildScamdocBox(result) {
+    result = result || {};
+    if (result.error) {
+        if ((result.error || '').toLowerCase().includes('timed out')) {
+            return `<div style="text-align:center; padding-top:8px;">
+                <span class="badge badge-neutral">EN COURS</span>
+                <div style="margin-top:10px; font-size:0.85rem; color:var(--text-muted);">
+                    Scamdoc met du temps à répondre. Réessaie dans quelques secondes.
+                </div>
+            </div>`;
+        }
+        return `<div class="api-error-box">${result.error}</div>`;
+    }
+
+    const verdict = (result.verdict || 'UNKNOWN').toUpperCase();
+    const badgeClass = verdict === 'MALICIOUS'
+        ? 'badge-malicious'
+        : (verdict === 'SUSPICIOUS' ? 'badge-suspicious' : (verdict === 'CLEAN' ? 'badge-clean' : 'badge-neutral'));
+
+    const trust = result.trust_score;
+    const risk = result.risk_score;
+
+    return `
+        <div style="text-align:center; padding-top:8px;">
+            <span class="badge ${badgeClass}">${verdict}</span>
+            <div style="margin-top:10px; font-size:0.85rem; color:var(--text-muted);">
+                <div>Trust Score: ${trust !== null && trust !== undefined ? Math.round(trust) + '%' : 'N/A'}</div>
+                <div>Risk Score: ${risk !== null && risk !== undefined ? Math.round(risk) + '%' : 'N/A'}</div>
+            </div>
+            ${result.detail_url ? `<div style="margin-top:10px;"><a href="${result.detail_url}" target="_blank" class="text-primary">Voir détails</a></div>` : ''}
         </div>
     `;
 }

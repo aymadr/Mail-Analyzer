@@ -4,9 +4,12 @@ Clients API pour VirusTotal, URLScan.io, AbuseIPDB
 import requests
 import time
 import base64
+from urllib.parse import urljoin
+from urllib.parse import urlparse
 from typing import Dict, Optional
 from config import (
     VIRUSTOTAL_API_KEY, URLSCAN_API_KEY, ABUSEIPDB_API_KEY,
+    SCAMDOC_API_KEY, SCAMDOC_BASE_URL, SCAMDOC_URL_PATH, SCAMDOC_EMAIL_PATH, SCAMDOC_RAPIDAPI_HOST, SCAMDOC_TIMEOUT,
     API_TIMEOUT, MAX_RETRIES
 )
 
@@ -306,6 +309,204 @@ class AbuseIPDBClient(APIClient):
             }
         except Exception as e:
             return {"error": str(e), "source": "AbuseIPDB"}
+
+
+class ScamdocClient(APIClient):
+    """Client Scamdoc / ScamPredictor pour analyser URL et email."""
+
+    def __init__(self):
+        self.api_key = SCAMDOC_API_KEY
+        self.base_url = SCAMDOC_BASE_URL.rstrip("/")
+        self.url_path = SCAMDOC_URL_PATH
+        self.email_path = SCAMDOC_EMAIL_PATH
+        self.rapidapi_host = SCAMDOC_RAPIDAPI_HOST or self._infer_host(self.base_url)
+
+    def check_url(self, url: str) -> Dict:
+        """Analyse une URL avec Scamdoc."""
+        if not self.api_key:
+            return {"error": "Scamdoc API key not configured", "source": "Scamdoc"}
+
+        domain = self._extract_domain_from_url(url)
+        payload = {"url": url, "domain_name": domain, "domain": domain}
+
+        candidate_paths = [
+            self.url_path,
+            "/Domain_trustscore/{domain_name}",
+            "/domain_trustscore/{domain_name}",
+            "/domain/{domain_name}",
+        ]
+
+        return self._request_with_fallback(candidate_paths, payload)
+
+    def check_email(self, email_value: str) -> Dict:
+        """Analyse un email avec Scamdoc."""
+        if not self.api_key:
+            return {"error": "Scamdoc API key not configured", "source": "Scamdoc"}
+
+        payload = {"email": email_value}
+        candidate_paths = [
+            self.email_path,
+            "/Email_trustscore/{email}",
+            "/email_trustscore/{email}",
+            "/email/{email}",
+        ]
+
+        return self._request_with_fallback(candidate_paths, payload)
+
+    def _request_with_fallback(self, paths, payload: Dict) -> Dict:
+        """Essaie plusieurs paths Scamdoc (RapidAPI variants) jusqu'au succès."""
+        errors = []
+        for candidate in paths:
+            result = self._request(candidate, payload)
+            if not result.get("error"):
+                return result
+
+            errors.append({
+                "path": candidate,
+                "error": result.get("error"),
+                "endpoint": result.get("endpoint"),
+            })
+
+            # Sur timeout ou erreur réseau, inutile de tenter d'autres paths.
+            message = (result.get("error") or "").lower()
+            if "timed out" in message or "connection" in message:
+                break
+
+        return {
+            "source": "Scamdoc",
+            "error": errors[-1]["error"] if errors else "Unknown Scamdoc error",
+            "target": payload,
+            "attempts": errors,
+            "endpoint": errors[-1].get("endpoint") if errors else None,
+        }
+
+    def _request(self, path: str, payload: Dict) -> Dict:
+        endpoint_path = path.format(**payload)
+        endpoint = urljoin(f"{self.base_url}/", endpoint_path.lstrip("/"))
+        headers = {
+            "x-rapidapi-key": self.api_key,
+            "x-rapidapi-host": self.rapidapi_host,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        # Si le path utilise des placeholders, on évite de doubler les infos en query params.
+        params = {} if "{" in path else dict(payload)
+
+        try:
+            response = requests.get(endpoint, headers=headers, params=params, timeout=SCAMDOC_TIMEOUT)
+            if response.status_code >= 400:
+                response = requests.post(endpoint, headers=headers, json=payload, timeout=SCAMDOC_TIMEOUT)
+
+            response.raise_for_status()
+            data = response.json() if response.text else {}
+
+            return self._normalize_response(data, payload)
+        except Exception as e:
+            return {
+                "source": "Scamdoc",
+                "error": str(e),
+                "target": payload,
+                "endpoint": endpoint,
+            }
+
+    @staticmethod
+    def _extract_domain_from_url(value: str) -> str:
+        try:
+            parsed = urlparse(value if "://" in value else f"https://{value}")
+            return (parsed.hostname or value).lower()
+        except Exception:
+            return value.lower() if value else ""
+
+    @staticmethod
+    def _infer_host(base_url: str) -> str:
+        try:
+            return urlparse(base_url).netloc
+        except Exception:
+            return ""
+
+    def _normalize_response(self, data: Dict, payload: Dict) -> Dict:
+        # ScamPredictor specific logic: usually returns `{"class": 1...5}` where 1 is safe, 5 is malicious
+        if "class" in data and isinstance(data["class"], (int, float)):
+            cls_val = float(data["class"])
+            
+            # Map class 1-5 to a 0-100 risk score and 100-0 trust score
+            risk_score = (cls_val - 1) * 25.0
+            trust_score = 100.0 - risk_score
+            
+            if cls_val <= 2:
+                verdict = "CLEAN"
+            elif cls_val == 3:
+                verdict = "SUSPICIOUS"
+            else:
+                verdict = "MALICIOUS"
+        else:
+            trust_score = self._pick_number(
+                data,
+                ["trust_score", "trustScore", "score_trust", "reliability_score", "trustscore", "score"]
+            )
+            risk_score = self._pick_number(
+                data,
+                ["risk_score", "riskScore", "scam_score", "fraud_score", "threat_score", "risk"]
+            )
+    
+            verdict_raw = self._pick_value(data, ["verdict", "status", "result", "prediction", "label", "classif", "classification"]) 
+            verdict = self._normalize_verdict(verdict_raw, trust_score, risk_score)
+        
+        detail_url = self._pick_value(data, ["url", "report_url", "link", "result_url"])
+
+        return {
+            "source": "Scamdoc",
+            "target": payload,
+            "verdict": verdict,
+            "trust_score": trust_score,
+            "risk_score": risk_score,
+            "detail_url": detail_url,
+            "raw": data,
+        }
+
+    @staticmethod
+    def _pick_value(data: Dict, keys) -> Optional[str]:
+        for key in keys:
+            if key in data and data[key] not in (None, ""):
+                return str(data[key])
+        return None
+
+    @staticmethod
+    def _pick_number(data: Dict, keys) -> Optional[float]:
+        for key in keys:
+            if key in data and data[key] not in (None, ""):
+                try:
+                    return float(data[key])
+                except (TypeError, ValueError):
+                    continue
+        return None
+
+    @staticmethod
+    def _normalize_verdict(verdict_raw: Optional[str], trust_score: Optional[float], risk_score: Optional[float]) -> str:
+        if verdict_raw:
+            lowered = verdict_raw.strip().lower()
+            if lowered in {"clean", "safe", "trusted", "legit", "legitimate", "low"}:
+                return "CLEAN"
+            if lowered in {"suspicious", "medium", "warning", "unknown"}:
+                return "SUSPICIOUS"
+            if lowered in {"malicious", "scam", "fraud", "high", "dangerous", "phishing"}:
+                return "MALICIOUS"
+
+        if risk_score is not None:
+            if risk_score >= 70:
+                return "MALICIOUS"
+            if risk_score >= 30:
+                return "SUSPICIOUS"
+            return "CLEAN"
+
+        if trust_score is not None:
+            if trust_score < 30:
+                return "MALICIOUS"
+            if trust_score < 60:
+                return "SUSPICIOUS"
+            return "CLEAN"
+
+        return "UNKNOWN"
 
 
 if __name__ == "__main__":
