@@ -3,6 +3,7 @@ Clients API pour VirusTotal, URLScan.io, AbuseIPDB
 """
 import requests
 import time
+import base64
 from typing import Dict, Optional
 from config import (
     VIRUSTOTAL_API_KEY, URLSCAN_API_KEY, ABUSEIPDB_API_KEY,
@@ -61,11 +62,30 @@ class VirusTotalClient(APIClient):
             return {"error": "VirusTotal API key not configured"}
         
         try:
-            # Encoder l'URL
-            url_id = requests.utils.requote_uri(url)
+            # VirusTotal v3 attend l'URL en base64 url-safe sans padding
+            url_id = base64.urlsafe_b64encode(url.encode("utf-8")).decode("utf-8").strip("=")
             vt_url = f"{self.BASE_URL}/urls/{url_id}"
             
             response = requests.get(vt_url, headers=self.headers, timeout=API_TIMEOUT)
+            if response.status_code == 404:
+                # L'URL n'existe pas encore côté VT: on soumet un scan
+                submit = requests.post(
+                    f"{self.BASE_URL}/urls",
+                    headers=self.headers,
+                    data={"url": url},
+                    timeout=API_TIMEOUT
+                )
+                submit.raise_for_status()
+                submit_data = submit.json()
+                analysis_id = submit_data.get("data", {}).get("id")
+                return {
+                    "source": "VirusTotal",
+                    "url": url,
+                    "status": "QUEUED",
+                    "analysis_id": analysis_id,
+                    "message": "URL soumise a VirusTotal, resultat en attente"
+                }
+
             response.raise_for_status()
             data = response.json()
             
@@ -74,6 +94,37 @@ class VirusTotalClient(APIClient):
                 "url": url,
                 "stats": data.get("data", {}).get("attributes", {}).get("last_analysis_stats", {}),
                 "verdict": self._analyze_verdict(data),
+            }
+        except Exception as e:
+            return {"error": str(e), "source": "VirusTotal"}
+
+    def check_file(self, file_path: str, file_hash: Optional[str] = None) -> Dict:
+        """Analyse un fichier: hash lookup puis upload si inconnu"""
+        if not self.api_key:
+            return {"error": "VirusTotal API key not configured", "source": "VirusTotal"}
+
+        if file_hash:
+            hash_result = self.check_file_hash(file_hash)
+            if not hash_result.get("error"):
+                return hash_result
+
+        try:
+            with open(file_path, "rb") as file_obj:
+                response = requests.post(
+                    f"{self.BASE_URL}/files",
+                    headers=self.headers,
+                    files={"file": file_obj},
+                    timeout=API_TIMEOUT
+                )
+            response.raise_for_status()
+
+            data = response.json()
+            analysis_id = data.get("data", {}).get("id")
+            return {
+                "source": "VirusTotal",
+                "status": "QUEUED",
+                "analysis_id": analysis_id,
+                "message": "Fichier envoye a VirusTotal, resultat en attente"
             }
         except Exception as e:
             return {"error": str(e), "source": "VirusTotal"}

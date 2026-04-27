@@ -2,6 +2,7 @@
 Parser d'entête email - Extrait SPF, DKIM, DMARC et IPs
 """
 import re
+import ipaddress
 from email.parser import Parser
 from typing import Dict, List, Tuple
 
@@ -39,23 +40,32 @@ class EmailHeaderParser:
         domain = None
         ip = None
 
-        # 1. Vérification dans Received-SPF (ex: Received-SPF: pass (domain of example.com designates 192.168.1.1 as permitted sender) client-ip=192.168.1.1;)
-        received_spf_match = re.search(r"Received-SPF:\s*([a-zA-Z]+)(.*)", content, re.IGNORECASE)
-        if received_spf_match:
-            status = received_spf_match.group(1).capitalize()
-            line_content = received_spf_match.group(2)
+        # 1. Vérification dans Received-SPF (supporte les headers multi-lignes)
+        received_spf_block = self._extract_header_block(content, "Received-SPF")
+        if received_spf_block:
+            status_match = re.search(r"^\s*([a-zA-Z]+)", received_spf_block, re.IGNORECASE)
+            if status_match:
+                status = status_match.group(1).capitalize()
 
-            # Essaie de trouver le client-ip ou IP (IPv4 ou IPv6)
-            ip_match = re.search(r"client-ip=([a-fA-F0-9\.:]+)", line_content, re.IGNORECASE)
-            if not ip_match:
-                ip_match = re.search(r"designates\s+([a-fA-F0-9\.:]+)\s+as permitted sender", line_content, re.IGNORECASE)
+            # Essaie de trouver le client-ip ou IP (IPv4 sinon IPv6)
+            ip_match = re.search(r"client-ip=([^\s;]+)", received_spf_block, re.IGNORECASE)
             if ip_match:
-                ip = ip_match.group(1)
+                ip = self._extract_best_ip(ip_match.group(1))
+            if not ip:
+                designates_match = re.search(
+                    r"designates\s+([^\s;]+)\s+as permitted sender",
+                    received_spf_block,
+                    re.IGNORECASE
+                )
+                if designates_match:
+                    ip = self._extract_best_ip(designates_match.group(1))
+            if not ip:
+                ip = self._extract_best_ip(received_spf_block)
 
             # Essaie de trouver le domaine (envelope-from ou domain of)
-            domain_match = re.search(r"envelope-from=[^\s@]*@([^\s;]+)", line_content, re.IGNORECASE)
+            domain_match = re.search(r"envelope-from=[^\s@]*@([^\s;]+)", received_spf_block, re.IGNORECASE)
             if not domain_match:
-                domain_match = re.search(r"domain of ([^\s]+)\s+designates", line_content, re.IGNORECASE)
+                domain_match = re.search(r"domain of ([^\s;]+)\s+designates", received_spf_block, re.IGNORECASE)
             if domain_match:
                 domain = domain_match.group(1).lstrip(".*@")
                 
@@ -64,12 +74,13 @@ class EmailHeaderParser:
             auth_results_match = re.search(r"Authentication-Results:.*?spf=([a-zA-Z]+)(.*)", content, re.IGNORECASE | re.DOTALL)
             if auth_results_match:
                 status = auth_results_match.group(1).capitalize()
-                rest = auth_results_match.group(2).split(';')[0] if ';' in auth_results_match.group(2) else auth_results_match.group(2)
                 
                 # IP dans Authentication-Results (IPv4 ou IPv6)
-                ip_match = re.search(r"sender IP is ([a-fA-F0-9\.:]+)", content, re.IGNORECASE)
+                ip_match = re.search(r"sender IP is ([^\s;]+)", content, re.IGNORECASE)
                 if ip_match:
-                    ip = ip_match.group(1)
+                    ip = self._extract_best_ip(ip_match.group(1))
+                if not ip:
+                    ip = self._extract_best_ip(content)
                     
                 domain_match = re.search(r"smtp\.mailfrom=([^\s;]+)", content, re.IGNORECASE)
                 if domain_match:
@@ -132,15 +143,21 @@ class EmailHeaderParser:
     
     def _extract_ips(self, content: str) -> List[str]:
         """Extrait toutes les adresses IP (IPv4 et IPv6)"""
-        # Regex pour IPv4
-        ipv4_pattern = r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b"
-        # Regex pour IPv6
-        ipv6_pattern = r"(?<![:.\w])(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}(?![:.\w])|(?<![:.\w])(?:[A-F0-9]{1,4}:)*::(?:[A-F0-9]{1,4}:)*[A-F0-9]{1,4}(?![:.\w])"
-        
-        ips = re.findall(f"{ipv4_pattern}|{ipv6_pattern}", content, re.IGNORECASE)
-        # re.findall retourne des strings pleines si pas de groupes, donc on nettoie
-        cleaned_ips = [ip for ip in ips if ip]
-        return list(set(cleaned_ips))  # Remove duplicates
+        candidates = re.findall(r"[A-Fa-f0-9:\.]+", content)
+        ips = []
+
+        for candidate in candidates:
+            value = candidate.strip("[]()<>{};,\"'")
+            if not value:
+                continue
+            try:
+                ipaddress.ip_address(value)
+                ips.append(value)
+            except ValueError:
+                continue
+
+        # Déduplication en conservant l'ordre d'apparition
+        return list(dict.fromkeys(ips))
     
     def _extract_domains(self, content: str) -> List[str]:
         """Extrait les domaines"""
@@ -152,6 +169,35 @@ class EmailHeaderParser:
         """Parse les headers 'Received'"""
         received = message.get_all("Received", [])
         return [{"header": h} for h in received] if received else []
+
+    def _extract_header_block(self, content: str, header_name: str) -> str:
+        """Extrait un header complet y compris les lignes continuées"""
+        pattern = rf"^{re.escape(header_name)}:\s*(.*(?:\n[ \t].*)*)"
+        match = re.search(pattern, content, re.IGNORECASE | re.MULTILINE)
+        return match.group(1) if match else ""
+
+    def _extract_best_ip(self, text: str) -> str:
+        """Retourne IPv4 en priorité, sinon IPv6"""
+        ipv4_match = re.search(
+            r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b",
+            text
+        )
+        if ipv4_match:
+            return ipv4_match.group(0)
+
+        # Fallback IPv6: on valide les candidats pour éviter les captures tronquées
+        candidates = re.findall(r"[A-Fa-f0-9:]+", text)
+        for candidate in sorted(candidates, key=len, reverse=True):
+            value = candidate.strip("[]()<>{};,\"'")
+            if ":" not in value:
+                continue
+            try:
+                ipaddress.IPv6Address(value)
+                return value
+            except ValueError:
+                continue
+
+        return None
     
     def _extract_dkim_domain(self, dkim_content: str) -> str:
         """Extrait le domaine DKIM"""

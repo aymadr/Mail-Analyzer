@@ -344,6 +344,16 @@ function renderAttachmentResult(data) {
         const vt = data.virustotal.sha256;
         if(vt.error) {
             html += `<div class="result-card"><div class="result-header"><i class="fa-solid fa-bug"></i> VirusTotal</div><div class="result-body"><div class="api-error-box">${vt.error}</div></div></div>`;
+        } else if (vt.status === 'QUEUED') {
+            html += `
+                <div class="result-card">
+                    <div class="result-header"><i class="fa-solid fa-bug"></i> VirusTotal Scan</div>
+                    <div class="result-body">
+                        <div class="badge badge-neutral mb-2 inline-block">En attente</div>
+                        <div class="text-sm text-muted">${vt.message || 'Analyse en cours sur VirusTotal.'}</div>
+                    </div>
+                </div>
+            `;
         } else {
             html += `
                 <div class="result-card">
@@ -374,6 +384,12 @@ function renderUrlResult(data) {
     if(data.virustotal) {
         html += `<div class="stat-item"><span class="stat-label"><i class="fa-solid fa-bug"></i> VirusTotal</span>`;
         if(data.virustotal.error) html += `<div class="api-error-box">${data.virustotal.error}</div>`;
+        else if (data.virustotal.status === 'QUEUED') {
+            html += `<div style="margin-top:15px; text-align:center;">
+                <span class="badge badge-neutral">En attente</span>
+                <p class="text-sm text-muted" style="margin-top:10px;">${data.virustotal.message || 'Analyse URL en cours sur VirusTotal.'}</p>
+            </div>`;
+        }
         else {
             html += `<div style="margin-top:15px; text-align:center;">
                 <span class="badge badge-${(data.virustotal.verdict||'').toLowerCase()}">${data.virustotal.verdict}</span>

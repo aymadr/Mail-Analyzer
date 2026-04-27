@@ -90,6 +90,19 @@ mail-security-tool/
   - IPs et domaines
   - Vérifie les IPs sur VirusTotal et AbuseIPDB
 
+#### Analyse des Routages (IPs)
+Dans le rapport d'analyse email, la section **Analyse des Routages (IPs)** affiche le chemin technique du message à partir des en-têtes mail.
+
+Pour chaque IP détectée, l'interface montre:
+- L'adresse IP du serveur de passage/envoi
+- Les statistiques VirusTotal (malicious/suspicious/clean)
+- Les informations de contexte (pays, ASN)
+- Le score AbuseIPDB (abuse confidence)
+
+Cette section sert à repérer rapidement si un email a transité par une infrastructure suspecte (IP signalée, serveur compromis, relais douteux, etc.).
+
+Note: ce n'est pas un traceroute réseau en direct. L'analyse est basée sur les en-têtes présents dans l'email reçu.
+
 ### 2. Analyse de Pièce Jointe
 - Charger le fichier suspect
 - Calcule: MD5, SHA1, SHA256

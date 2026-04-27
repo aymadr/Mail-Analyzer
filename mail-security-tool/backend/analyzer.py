@@ -69,10 +69,12 @@ class SecurityAnalyzer:
             "analysis": {}
         }
         
-        # Analyse VirusTotal
+        # Analyse VirusTotal (une requête pour éviter le rate-limit)
+        vt_result = self.vt_client.check_file(file_path, hashes.get('sha256'))
+        results["virustotal"]["sha256"] = vt_result
+
+        # Sauvegarde tous les hashes avec le meme resultat VT
         for hash_type in ['md5', 'sha1', 'sha256']:
-            vt_result = self.vt_client.check_file_hash(hashes[hash_type])
-            results["virustotal"][hash_type] = vt_result
             self.db.save_file_hash_analysis(hashes[hash_type], hash_type, vt_result)
         
         return results
