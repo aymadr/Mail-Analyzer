@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
 from flask import Flask, render_template, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 import os
+import ipaddress
 from analyzer import SecurityAnalyzer
 
 app = Flask(__name__)
@@ -105,6 +106,11 @@ def analyze_ip():
     
     if not ip:
         return jsonify({"error": "IP non fournie"}), 400
+
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        return jsonify({"error": "Format IP invalide (IPv4 ou IPv6 attendu)"}), 400
     
     try:
         vt_result = analyzer.vt_client.check_ip(ip)
@@ -120,6 +126,11 @@ def analyze_ip():
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/dashboard', methods=['GET'])
+def get_dashboard():
+    """Récupère les métriques principales du dashboard."""
+    return jsonify(analyzer.db.get_dashboard_summary())
 
 @app.route('/api/history', methods=['GET'])
 def get_history():

@@ -217,23 +217,83 @@ class Database:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT * FROM email_analysis ORDER BY updated_at DESC LIMIT ?",
-                    (limit,)
-                )
+                cursor.execute("""
+                    SELECT 'email' AS type, sender AS title, subject AS detail, updated_at AS date, analysis_data AS data
+                    FROM email_analysis
+                    UNION ALL
+                    SELECT 'attachment' AS type, file_hash AS title, hash_type AS detail, updated_at AS date, analysis_data AS data
+                    FROM file_hashes
+                    UNION ALL
+                    SELECT 'ip' AS type, ip_address AS title, 'IP' AS detail, updated_at AS date, analysis_data AS data
+                    FROM ip_analysis
+                    UNION ALL
+                    SELECT 'url' AS type, url AS title, 'URL' AS detail, updated_at AS date, analysis_data AS data
+                    FROM url_analysis
+                    ORDER BY date DESC
+                    LIMIT ?
+                """, (limit,))
                 results = cursor.fetchall()
-                return [
-                    {
-                        "type": "email",
-                        "sender": row[2],
-                        "subject": row[3],
-                        "data": json.loads(row[4]),
-                        "date": row[5]
-                    } for row in results
-                ]
+
+                history = []
+                for row in results:
+                    data = json.loads(row[4]) if row[4] else {}
+                    history.append({
+                        "type": row[0],
+                        "title": row[1],
+                        "detail": row[2],
+                        "data": data,
+                        "date": row[3]
+                    })
+
+                return history
         except Exception as e:
             print(f"Erreur lecture analyses: {e}")
             return []
+
+    def get_dashboard_summary(self) -> Dict:
+        """Récupère les métriques principales pour le dashboard."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+
+                cursor.execute("SELECT COUNT(*) FROM email_analysis")
+                emails = cursor.fetchone()[0]
+
+                cursor.execute("SELECT COUNT(*) FROM file_hashes")
+                attachments = cursor.fetchone()[0]
+
+                cursor.execute("SELECT COUNT(*) FROM ip_analysis")
+                ips = cursor.fetchone()[0]
+
+                cursor.execute("SELECT COUNT(*) FROM url_analysis")
+                urls = cursor.fetchone()[0]
+
+                cursor.execute(
+                    "SELECT sender, subject, updated_at FROM email_analysis ORDER BY updated_at DESC LIMIT 1"
+                )
+                latest = cursor.fetchone()
+
+                return {
+                    "totals": {
+                        "emails": emails,
+                        "attachments": attachments,
+                        "ips": ips,
+                        "urls": urls
+                    },
+                    "latest_email": {
+                        "sender": latest[0] if latest else None,
+                        "subject": latest[1] if latest else None,
+                        "date": latest[2] if latest else None
+                    },
+                    "recent": self.get_all_analyses(5)
+                }
+        except Exception as e:
+            print(f"Erreur dashboard: {e}")
+            return {
+                "totals": {"emails": 0, "attachments": 0, "ips": 0, "urls": 0},
+                "latest_email": {"sender": None, "subject": None, "date": None},
+                "recent": []
+            }
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 Orchestrateur principal - Coordonne toutes les analyses
 """
 import hashlib
+from urllib.parse import urlparse
 from email_parser import EmailHeaderParser
 from hash_calculator import HashCalculator
 from api_clients import VirusTotalClient, URLScanIOClient, AbuseIPDBClient
@@ -40,10 +41,29 @@ class SecurityAnalyzer:
             })
             self.db.save_ip_analysis(ip, {"vt": vt_ip, "abuseipdb": abuseipdb_ip})
         
+        # Analyse les pièces jointes (hashes)
+        attachment_results = []
+        for attachment in email_data.get('attachments', []):
+            vt_results = {}
+            for hash_type in ['md5', 'sha1', 'sha256']:
+                vt_result = self.vt_client.check_file_hash(attachment[hash_type])
+                vt_results[hash_type] = vt_result
+                self.db.save_file_hash_analysis(attachment[hash_type], hash_type, vt_result)
+            
+            attachment_results.append({
+                "filename": attachment['filename'],
+                "size": attachment['size'],
+                "md5": attachment['md5'],
+                "sha1": attachment['sha1'],
+                "sha256": attachment['sha256'],
+                "virustotal": vt_results
+            })
+        
         # Compile les résultats
         full_analysis = {
             "email": email_data,
             "ips": ip_results,
+            "attachments": attachment_results,
             "hash": email_hash
         }
         
@@ -69,26 +89,36 @@ class SecurityAnalyzer:
             "analysis": {}
         }
         
-        # Analyse VirusTotal (une requête pour éviter le rate-limit)
-        vt_result = self.vt_client.check_file(file_path, hashes.get('sha256'))
-        results["virustotal"]["sha256"] = vt_result
-
-        # Sauvegarde tous les hashes avec le meme resultat VT
+        # Analyse VirusTotal par hash (lookup dans la base VirusTotal, sans upload)
         for hash_type in ['md5', 'sha1', 'sha256']:
+            vt_result = self.vt_client.check_file_hash(hashes[hash_type])
+            results["virustotal"][hash_type] = vt_result
             self.db.save_file_hash_analysis(hashes[hash_type], hash_type, vt_result)
         
         return results
     
     def analyze_url(self, url: str) -> Dict:
         """Analyse complète d'une URL"""
+        normalized_url = self._normalize_url(url)
         results = {
-            "url": url,
-            "virustotal": self.vt_client.check_url(url),
-            "urlscan": self.urlscan_client.scan_url(url)
+            "url": normalized_url,
+            "virustotal": self.vt_client.check_url(normalized_url),
+            "urlscan": self.urlscan_client.scan_url(normalized_url)
         }
         
-        self.db.save_url_analysis(url, results)
+        self.db.save_url_analysis(normalized_url, results)
         return results
+
+    @staticmethod
+    def _normalize_url(url: str) -> str:
+        """Ajoute https:// si aucun schéma n'est présent."""
+        value = (url or "").strip()
+        if not value:
+            return value
+        parsed = urlparse(value)
+        if not parsed.scheme:
+            return f"https://{value}"
+        return value
     
     def get_report(self, email_hash: str) -> Dict:
         """Récupère le rapport d'une analyse"""

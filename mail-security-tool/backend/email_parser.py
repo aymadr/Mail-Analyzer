@@ -3,6 +3,7 @@ Parser d'entête email - Extrait SPF, DKIM, DMARC et IPs
 """
 import re
 import ipaddress
+import hashlib
 from email.parser import Parser
 from typing import Dict, List, Tuple
 
@@ -31,6 +32,7 @@ class EmailHeaderParser:
             "ips": self._extract_ips(email_content),
             "domains": self._extract_domains(email_content),
             "received_from": self._extract_received_headers(message),
+            "attachments": self._extract_attachments(message),
             "raw_headers": dict(message.items())
         }
     
@@ -220,6 +222,33 @@ class EmailHeaderParser:
         dmarc_pattern = r"p=(reject|quarantine|none)"
         match = re.search(dmarc_pattern, content, re.IGNORECASE)
         return match.group(1) if match else None
+
+    def _extract_attachments(self, message) -> List[Dict]:
+        """Extrait les pièces jointes et calcule leurs hashes"""
+        attachments = []
+        
+        for part in message.walk():
+            # Cherche les pièces jointes
+            if part.get_content_disposition() == 'attachment':
+                filename = part.get_filename()
+                if filename:
+                    # Récupère le contenu
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        # Calcule les hashes
+                        md5 = hashlib.md5(payload).hexdigest()
+                        sha1 = hashlib.sha1(payload).hexdigest()
+                        sha256 = hashlib.sha256(payload).hexdigest()
+                        
+                        attachments.append({
+                            "filename": filename,
+                            "size": len(payload),
+                            "md5": md5,
+                            "sha1": sha1,
+                            "sha256": sha256
+                        })
+        
+        return attachments
 
 
 # Utilisation facile

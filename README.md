@@ -81,6 +81,20 @@ mail-security-tool/
 6. **Accéder à l'interface**
    - Ouvrir navigateur: `http://127.0.0.1:5000`
 
+## 🐳 Pourquoi Docker ?
+
+Docker est inclus pour exécuter l'application dans un environnement standardisé, sans dépendre de la configuration locale.
+
+Avantages principaux:
+- Même environnement pour tout le monde (version Python, dépendances, chemins)
+- Démarrage rapide avec `docker compose up` (pas besoin d'installer manuellement toutes les libs)
+- Isolation du projet (moins de conflits avec d'autres projets Python)
+- Déploiement plus simple (comportement proche entre local et serveur)
+
+Le stack Docker du projet:
+- [mail-security-tool/Dockerfile](mail-security-tool/Dockerfile): construit l'image applicative
+- [mail-security-tool/docker-compose.yml](mail-security-tool/docker-compose.yml): lance le service web, mappe le port `5000` et persiste `data/` et `uploads/`
+
 ## 📖 Utilisation
 
 ### 1. Analyse d'Email

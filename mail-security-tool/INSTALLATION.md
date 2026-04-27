@@ -10,9 +10,12 @@ cd mail-security-tool
 
 # 2. Créer environnement virtuel
 python -m venv venv
-source venv/Scripts/activate  # Windows
-# ou
-source venv/bin/activate      # Linux/Mac
+# Windows PowerShell
+.\venv\Scripts\Activate.ps1
+# Windows CMD
+venv\Scripts\activate.bat
+# Linux/Mac
+source venv/bin/activate
 
 # 3. Installer les dépendances
 pip install -r requirements.txt
@@ -29,9 +32,43 @@ cd frontend && python app.py
 # http://127.0.0.1:5000
 ```
 
+### Option 1 bis: Lancement avec Docker (clone puis run)
+
+Oui, le flux est bien: **cloner le projet GitHub**, puis **lancer Docker**.
+
+```bash
+# 1. Cloner le repo
+git clone <URL_DU_REPO>
+cd mail-security-tool
+
+# 2. Préparer les variables d'environnement
+cp .env.example .env
+# puis éditer .env avec les clés API
+
+# 3. Construire et démarrer le conteneur
+docker compose up --build -d
+
+# 4. Ouvrir l'interface
+# http://127.0.0.1:5000
+```
+
+Commandes utiles:
+```bash
+# Voir les logs
+docker compose logs -f
+
+# Arrêter les services
+docker compose down
+```
+
 ### Option 2: Ligne de Commande (CLI)
 
 ```bash
+# Active d'abord l'environnement virtuel
+# Windows PowerShell: .\venv\Scripts\Activate.ps1
+# Windows CMD: venv\Scripts\activate.bat
+# Linux/Mac: source venv/bin/activate
+
 # Analyser un email
 python cli.py --email mon_email.eml
 
@@ -52,6 +89,14 @@ python cli.py --email mon_email.eml --json
 
 # Avec détails supplémentaires
 python cli.py --email mon_email.eml -v
+```
+
+### Option CLI Windows (raccourci prêt à l'emploi)
+
+```powershell
+# Depuis le dossier mail-security-tool
+.\venv\Scripts\Activate.ps1
+python cli.py --email .\examples\sample.eml --json
 ```
 
 ## 🔑 Obtenir les Clés API

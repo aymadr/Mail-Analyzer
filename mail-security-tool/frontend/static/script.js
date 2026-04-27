@@ -4,6 +4,7 @@
 
 // Tab Configuration logic
 const tabConfig = {
+    dashboard: { title: "Dashboard Sécurité", desc: "Rapport synthétique des analyses et indicateurs clés" },
     email: { title: "Inspecteur d'Email", desc: "Parse automatiquement les en-têtes SPF, DKIM, DMARC et analyse les IPs" },
     attachment: { title: "Sandbox Pièce Jointe", desc: "Calcul de Hash (SHA256, MD5) & Vérification Virustotal" },
     url: { title: "Scanner d'URL", desc: "Vérification réputation VirusTotal et empreinte URLScan" },
@@ -46,6 +47,7 @@ function initTabs() {
 
             // Load history dynamically
             if(target === 'history') loadHistory();
+            if(target === 'dashboard') loadDashboard();
         });
     });
 }
@@ -197,14 +199,22 @@ async function loadHistory() {
             return;
         }
 
+        const typeMeta = {
+            email: { icon: 'fa-envelope', label: 'Email' },
+            attachment: { icon: 'fa-file-shield', label: 'Pièce jointe' },
+            ip: { icon: 'fa-network-wired', label: 'IP' },
+            url: { icon: 'fa-link', label: 'URL' }
+        };
+
         let html = '';
         data.forEach(item => {
+            const meta = typeMeta[item.type] || { icon: 'fa-circle-info', label: item.type || 'Analyse' };
             const dateStr = new Date(item.date).toLocaleString('fr-FR');
             html += `
                 <div class="history-item">
                     <div class="h-info">
-                        <h4><i class="fa-solid fa-envelope mr-2"></i>${item.sender || 'Sender Inconnu'}</h4>
-                        <p>${item.subject || 'Sans Sujet'}</p>
+                        <h4><i class="fa-solid ${meta.icon} mr-2"></i>${meta.label} - ${item.title || 'Sans titre'}</h4>
+                        <p>${item.detail || 'Aucun détail'}</p>
                     </div>
                     <div class="h-date">${dateStr}</div>
                 </div>
@@ -213,6 +223,57 @@ async function loadHistory() {
         list.innerHTML = html;
     } catch (error) {
         list.innerHTML = `<div class="api-error-box"><i class="fa-solid fa-triangle-exclamation"></i> Impossible de charger l'historique</div>`;
+    }
+}
+
+// 6. Dashboard
+async function loadDashboard() {
+    const panel = document.getElementById('dashboardSummary');
+    panel.innerHTML = '<div class="loader-container"><div class="spinner"></div><p>Chargement du rapport...</p></div>';
+
+    try {
+        const res = await fetch('/api/dashboard');
+        const data = await res.json();
+
+        const totals = data.totals || {};
+        const latest = data.latest_email || {};
+        const recent = data.recent || [];
+
+        let html = `
+            <div class="result-body">
+                <div class="stats-grid">
+                    <div class="stat-item"><span class="stat-label">EMAILS ANALYSÉS</span><span class="stat-value">${totals.emails || 0}</span></div>
+                    <div class="stat-item"><span class="stat-label">PIÈCES JOINTES</span><span class="stat-value">${totals.attachments || 0}</span></div>
+                    <div class="stat-item"><span class="stat-label">IPS ANALYSÉES</span><span class="stat-value">${totals.ips || 0}</span></div>
+                    <div class="stat-item"><span class="stat-label">URLS ANALYSÉES</span><span class="stat-value">${totals.urls || 0}</span></div>
+                </div>
+                <div class="stat-item" style="margin-top:12px;">
+                    <span class="stat-label">DERNIER EMAIL ANALYSÉ</span>
+                    <div class="stat-value">${latest.sender || 'N/A'}</div>
+                    <div style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">${latest.subject || 'N/A'}</div>
+                </div>
+            </div>
+        `;
+
+        if (recent.length > 0) {
+            html += '<div class="history-header"><h3><i class="fa-solid fa-clock"></i> Activité récente</h3></div>';
+            recent.forEach(item => {
+                const dateStr = new Date(item.date).toLocaleString('fr-FR');
+                html += `
+                    <div class="history-item">
+                        <div class="h-info">
+                            <h4><i class="fa-solid fa-envelope mr-2"></i>${item.sender || 'Sender Inconnu'}</h4>
+                            <p>${item.subject || 'Sans Sujet'}</p>
+                        </div>
+                        <div class="h-date">${dateStr}</div>
+                    </div>
+                `;
+            });
+        }
+
+        panel.innerHTML = html;
+    } catch (err) {
+        panel.innerHTML = '<div class="api-error-box"><i class="fa-solid fa-triangle-exclamation"></i> Impossible de charger le dashboard</div>';
     }
 }
 
@@ -309,6 +370,79 @@ function renderEmailResult(data) {
         html += `</div></div>`;
     }
 
+    // Affiche les pièces jointes si présentes
+    if(data.attachments && data.attachments.length > 0) {
+        html += `<div class="result-card">
+            <div class="result-header"><i class="fa-solid fa-paperclip"></i> Pièces Jointes Détectées</div>
+            <div class="result-body">`;
+
+        data.attachments.forEach(att => {
+            const vt = att.virustotal || {};
+            
+            html += `
+                <div class="stat-item mb-4" style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color);">
+                    <div style="margin-bottom: 12px;">
+                        <strong><i class="fa-solid fa-file"></i> ${att.filename}</strong>
+                        <span class="text-muted text-sm" style="display: block; margin-top: 4px;">Taille: ${formatBytes(att.size)}</span>
+                    </div>
+                    
+                    <div class="stat-item mb-2">
+                        <span class="stat-label">SHA256</span>
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <span class="stat-value mono" style="font-size: 0.85em; word-break: break-all;">${att.sha256 || 'N/A'}</span>
+                            ${att.sha256 ? `<button class="btn btn-icon" onclick="copyToClipboard('${att.sha256}')" title="Copier SHA256"><i class="fa-regular fa-copy"></i></button>` : ''}
+                        </div>
+                    </div>
+                    <div class="stat-item mb-2">
+                        <span class="stat-label">SHA1</span>
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <span class="stat-value mono" style="font-size: 0.85em; word-break: break-all;">${att.sha1 || 'N/A'}</span>
+                            ${att.sha1 ? `<button class="btn btn-icon" onclick="copyToClipboard('${att.sha1}')" title="Copier SHA1"><i class="fa-regular fa-copy"></i></button>` : ''}
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">MD5</span>
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <span class="stat-value mono" style="font-size: 0.85em; word-break: break-all;">${att.md5 || 'N/A'}</span>
+                            ${att.md5 ? `<button class="btn btn-icon" onclick="copyToClipboard('${att.md5}')" title="Copier MD5"><i class="fa-regular fa-copy"></i></button>` : ''}
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+                    <strong style="display: block; margin-bottom: 12px;"><i class="fa-solid fa-bug"></i> Vérification VirusTotal</strong>
+            `;
+            
+            ['sha256', 'sha1', 'md5'].forEach(hashType => {
+                const result = vt[hashType] || {};
+                const hashLabel = hashType.toUpperCase();
+                const hashValue = att[hashType];
+                
+                html += `<div class="stat-item" style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);">
+                    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+                        <strong class="font-mono text-primary">${hashLabel}</strong>
+                        <span class="text-muted text-sm mono" style="word-break:break-all; font-size: 0.85em;">${hashValue}</span>
+                    </div>`;
+                
+                if (result.error) {
+                    html += `<div class="api-error-box">${result.error}</div>`;
+                } else {
+                    html += `
+                        <div style="margin-bottom:10px;">
+                            ${buildVerdictBox(result.verdict, buildVtStats(result.stats))}
+                        </div>
+                    `;
+                }
+                
+                html += `</div>`;
+            });
+            
+            html += `</div>`;
+        });
+
+        html += `</div></div>`;
+    }
+
     el.innerHTML = html;
     showToast('success', 'Analyse Terminée', 'Rapport généré avec succès');
 }
@@ -325,45 +459,74 @@ function copyToClipboard(text) {
 function renderAttachmentResult(data) {
     const el = document.getElementById('attachmentResult');
     const f = data.file || {};
+    const vt = data.virustotal || {};
     
     let html = `
         <div class="result-card">
             <div class="result-header"><i class="fa-solid fa-file-code"></i> Empreinte Cryptographique</div>
             <div class="result-body">
                 <div class="stats-grid">
-                    <div class="stat-item"><span class="stat-label">NOM</span><span class="stat-value">${f.file_name}</span></div>
+                    <div class="stat-item"><span class="stat-label">NOM</span><span class="stat-value">${f.file_name || 'N/A'}</span></div>
                     <div class="stat-item"><span class="stat-label">TAILLE</span><span class="stat-value font-mono">${formatBytes(f.file_size)}</span></div>
                 </div>
-                <div class="stat-item mb-2"><span class="stat-label">SHA256</span><span class="stat-value mono">${f.sha256}</span></div>
-                <div class="stat-item"><span class="stat-label">MD5</span><span class="stat-value mono">${f.md5}</span></div>
+                <div class="stat-item mb-2">
+                    <span class="stat-label">SHA256</span>
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <span class="stat-value mono">${f.sha256 || 'N/A'}</span>
+                        ${f.sha256 ? `<button class="btn btn-icon" onclick="copyToClipboard('${f.sha256}')" title="Copier SHA256"><i class="fa-regular fa-copy"></i></button>` : ''}
+                    </div>
+                </div>
+                <div class="stat-item mb-2">
+                    <span class="stat-label">SHA1</span>
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <span class="stat-value mono">${f.sha1 || 'N/A'}</span>
+                        ${f.sha1 ? `<button class="btn btn-icon" onclick="copyToClipboard('${f.sha1}')" title="Copier SHA1"><i class="fa-regular fa-copy"></i></button>` : ''}
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">MD5</span>
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <span class="stat-value mono">${f.md5 || 'N/A'}</span>
+                        ${f.md5 ? `<button class="btn btn-icon" onclick="copyToClipboard('${f.md5}')" title="Copier MD5"><i class="fa-regular fa-copy"></i></button>` : ''}
+                    </div>
+                </div>
             </div>
         </div>
     `;
 
-    if (data.virustotal && data.virustotal.sha256) {
-        const vt = data.virustotal.sha256;
-        if(vt.error) {
-            html += `<div class="result-card"><div class="result-header"><i class="fa-solid fa-bug"></i> VirusTotal</div><div class="result-body"><div class="api-error-box">${vt.error}</div></div></div>`;
-        } else if (vt.status === 'QUEUED') {
-            html += `
-                <div class="result-card">
-                    <div class="result-header"><i class="fa-solid fa-bug"></i> VirusTotal Scan</div>
-                    <div class="result-body">
-                        <div class="badge badge-neutral mb-2 inline-block">En attente</div>
-                        <div class="text-sm text-muted">${vt.message || 'Analyse en cours sur VirusTotal.'}</div>
+    const vtHashes = [
+        { type: 'sha256', label: 'SHA256', value: f.sha256 },
+        { type: 'sha1', label: 'SHA1', value: f.sha1 },
+        { type: 'md5', label: 'MD5', value: f.md5 },
+    ].filter(item => item.value);
+
+    if (vtHashes.length > 0) {
+        html += `<div class="result-card">
+            <div class="result-header"><i class="fa-solid fa-bug"></i> Vérification VirusTotal des Hashs</div>
+            <div class="result-body">`;
+
+        vtHashes.forEach(item => {
+            const result = vt[item.type] || {};
+            html += `<div class="stat-item mb-4" style="margin-bottom:15px;">
+                <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; border-bottom:1px solid var(--border-color); padding-bottom:8px; margin-bottom:10px;">
+                    <strong class="font-mono text-primary">${item.label}</strong>
+                    <span class="text-muted text-sm mono" style="word-break:break-all;">${item.value}</span>
+                </div>`;
+
+            if (result.error) {
+                html += `<div class="api-error-box">${result.error}</div>`;
+            } else {
+                html += `
+                    <div style="margin-bottom:10px;">
+                        ${buildVerdictBox(result.verdict, buildVtStats(result.stats))}
                     </div>
-                </div>
-            `;
-        } else {
-            html += `
-                <div class="result-card">
-                    <div class="result-header"><i class="fa-solid fa-bug"></i> VirusTotal Scan</div>
-                    <div class="result-body">
-                        ${buildVerdictBox(vt.verdict, buildVtStats(vt.stats))}
-                    </div>
-                </div>
-            `;
-        }
+                `;
+            }
+
+            html += `</div>`;
+        });
+
+        html += `</div></div>`;
     }
 
     el.innerHTML = html;
