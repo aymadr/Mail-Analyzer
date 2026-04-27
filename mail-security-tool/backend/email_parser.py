@@ -8,6 +8,7 @@ from pathlib import Path
 from html import unescape
 from html.parser import HTMLParser
 from urllib.parse import urlsplit, urlunsplit
+from email.header import decode_header, make_header
 from email.parser import Parser
 from typing import Dict, List
 
@@ -64,11 +65,23 @@ class EmailHeaderParser:
 
         msg = extract_msg.Message(str(file_path))
 
-        sender = (getattr(msg, "sender", "") or "").strip()
-        to_header = (getattr(msg, "to", "") or "").strip()
-        subject = (getattr(msg, "subject", "") or "").strip()
+        transport_headers = self._extract_msg_transport_headers(msg)
+        headers_message = self.parser.parsestr(transport_headers) if transport_headers else None
+
+        sender = self._first_non_empty(
+            self._clean_header_value(getattr(msg, "sender", "")),
+            self._decode_mime_header(headers_message.get("From", "") if headers_message else "")
+        )
+        to_header = self._first_non_empty(
+            self._clean_header_value(getattr(msg, "to", "")),
+            self._decode_mime_header(headers_message.get("To", "") if headers_message else "")
+        )
+        subject = self._first_non_empty(
+            self._clean_header_value(getattr(msg, "subject", "")),
+            self._decode_mime_header(headers_message.get("Subject", "") if headers_message else "")
+        )
         date_value = getattr(msg, "date", None)
-        date = str(date_value) if date_value else ""
+        date = str(date_value) if date_value else self._decode_mime_header(headers_message.get("Date", "") if headers_message else "")
 
         body_text = (getattr(msg, "body", "") or "")
         html_body = ""
@@ -86,6 +99,7 @@ class EmailHeaderParser:
         ]
 
         synthetic_raw = "\n".join([
+            transport_headers,
             f"From: {sender}",
             f"To: {to_header}",
             f"Subject: {subject}",
@@ -94,7 +108,11 @@ class EmailHeaderParser:
             html_body,
         ])
 
-        received_recipients = self._extract_recipients_from_received_text(synthetic_raw)
+        received_recipients = (
+            self._extract_recipients_from_received(headers_message)
+            if headers_message else
+            self._extract_recipients_from_received_text(synthetic_raw)
+        )
         resolved_to = to_header or (received_recipients[0] if received_recipients else "")
         to_source = "To" if to_header else ("Received for" if received_recipients else "Unknown")
 
@@ -111,10 +129,10 @@ class EmailHeaderParser:
             "dmarc": self._extract_dmarc(synthetic_raw),
             "ips": self._extract_ips(synthetic_raw),
             "domains": self._extract_domains(synthetic_raw),
-            "received_from": [],
+            "received_from": self._extract_received_headers(headers_message) if headers_message else [],
             "attachments": attachments,
             "urls": url_data,
-            "raw_headers": {},
+            "raw_headers": dict(headers_message.items()) if headers_message else {},
             "format": "msg"
         }
 
@@ -123,16 +141,35 @@ class EmailHeaderParser:
         raw_bytes = file_path.read_bytes()
         blob = raw_bytes.decode("latin-1", errors="ignore")
 
+        header_block = self._extract_header_block_from_blob(blob)
+        headers_message = self.parser.parsestr(header_block) if header_block else None
+
         def find_first(pattern: str) -> str:
             match = re.search(pattern, blob, flags=re.IGNORECASE)
             return (match.group(1).strip() if match else "")
 
-        sender = find_first(r"From:\s*([^\r\n\x00]+)")
-        to_header = find_first(r"To:\s*([^\r\n\x00]+)")
-        subject = find_first(r"Subject:\s*([^\r\n\x00]+)")
-        date = find_first(r"Date:\s*([^\r\n\x00]+)")
+        sender = self._first_non_empty(
+            self._decode_mime_header(headers_message.get("From", "") if headers_message else ""),
+            find_first(r"From:\s*([^\r\n\x00]+)")
+        )
+        to_header = self._first_non_empty(
+            self._decode_mime_header(headers_message.get("To", "") if headers_message else ""),
+            find_first(r"To:\s*([^\r\n\x00]+)")
+        )
+        subject = self._first_non_empty(
+            self._decode_mime_header(headers_message.get("Subject", "") if headers_message else ""),
+            find_first(r"Subject:\s*([^\r\n\x00]+)")
+        )
+        date = self._first_non_empty(
+            self._decode_mime_header(headers_message.get("Date", "") if headers_message else ""),
+            find_first(r"Date:\s*([^\r\n\x00]+)")
+        )
 
-        received_recipients = self._extract_recipients_from_received_text(blob)
+        received_recipients = (
+            self._extract_recipients_from_received(headers_message)
+            if headers_message else
+            self._extract_recipients_from_received_text(blob)
+        )
         resolved_to = to_header or (received_recipients[0] if received_recipients else "")
         to_source = "To" if to_header else ("Received for" if received_recipients else "Unknown")
 
@@ -151,15 +188,81 @@ class EmailHeaderParser:
             "dmarc": self._extract_dmarc(blob),
             "ips": self._extract_ips(blob),
             "domains": self._extract_domains(blob),
-            "received_from": [],
+            "received_from": self._extract_received_headers(headers_message) if headers_message else [],
             "attachments": [],
             "urls": url_data,
-            "raw_headers": {},
+            "raw_headers": dict(headers_message.items()) if headers_message else {},
             "format": "msg-fallback",
             "warnings": [
                 "extract_msg non disponible: parsing .msg en mode dégradé"
             ]
         }
+
+    def _extract_msg_transport_headers(self, msg) -> str:
+        """Récupère les headers transport d'un objet extract_msg si disponibles."""
+        candidates = [
+            getattr(msg, "header", None),
+            getattr(msg, "headers", None),
+            getattr(msg, "transport_headers", None),
+            getattr(msg, "transportHeaders", None),
+            getattr(msg, "internetHeaders", None),
+            getattr(msg, "headerText", None),
+            getattr(msg, "messageHeaders", None),
+        ]
+
+        for candidate in candidates:
+            if not candidate:
+                continue
+            try:
+                if hasattr(candidate, "as_string"):
+                    value = candidate.as_string()
+                else:
+                    value = str(candidate)
+                if value and any(h in value for h in ["From:", "To:", "Subject:", "Received:"]):
+                    return value.replace("\x00", "")
+            except Exception:
+                continue
+
+        return ""
+
+    def _extract_header_block_from_blob(self, blob: str) -> str:
+        """Extrait un bloc de headers RFC822 depuis un texte brut/bytes décodés."""
+        cleaned = (blob or "").replace("\x00", "")
+
+        start_positions = []
+        for marker in ["Received:", "From:", "To:", "Subject:", "Date:"]:
+            idx = cleaned.find(marker)
+            if idx >= 0:
+                start_positions.append(idx)
+
+        if not start_positions:
+            return ""
+
+        start = min(start_positions)
+        candidate = cleaned[start: start + 100000]
+        if "\n\n" in candidate:
+            candidate = candidate.split("\n\n", 1)[0]
+
+        return candidate
+
+    def _decode_mime_header(self, value: str) -> str:
+        """Décode les headers encodés MIME (=?utf-8?...?=)."""
+        if not value:
+            return ""
+        try:
+            return str(make_header(decode_header(value))).strip()
+        except Exception:
+            return str(value).strip()
+
+    def _clean_header_value(self, value: str) -> str:
+        return (value or "").replace("\x00", "").strip()
+
+    def _first_non_empty(self, *values: str) -> str:
+        for value in values:
+            cleaned = self._clean_header_value(value)
+            if cleaned:
+                return cleaned
+        return ""
 
     def _extract_msg_attachments(self, msg) -> List[Dict]:
         """Extrait les pièces jointes d'un .msg et calcule les hashes."""
@@ -259,7 +362,10 @@ class EmailHeaderParser:
         """Parse le contenu brut d'un email"""
         message = self.parser.parsestr(email_content)
         url_data = self._extract_urls(message, email_content)
-        to_header = message.get("To", "")
+        from_header = self._decode_mime_header(message.get("From", ""))
+        to_header = self._decode_mime_header(message.get("To", ""))
+        subject_header = self._decode_mime_header(message.get("Subject", ""))
+        date_header = self._decode_mime_header(message.get("Date", ""))
         received_recipients = self._extract_recipients_from_received(message)
 
         resolved_to = to_header
@@ -269,13 +375,13 @@ class EmailHeaderParser:
             to_source = "Received for"
         
         return {
-            "from": message.get("From", ""),
+            "from": from_header,
             "to": resolved_to,
             "to_header": to_header,
             "to_detected": received_recipients,
             "to_source": to_source,
-            "subject": message.get("Subject", ""),
-            "date": message.get("Date", ""),
+            "subject": subject_header,
+            "date": date_header,
             "spf": self._extract_spf(email_content),
             "dkim": self._extract_dkim(email_content),
             "dmarc": self._extract_dmarc(email_content),
@@ -517,6 +623,7 @@ class EmailHeaderParser:
     
     def _extract_spf(self, content: str) -> Dict:
         """Extrait les informations SPF, le domaine et l'IP"""
+        content = self._normalize_header_text(content)
         status = "Not found"
         domain = None
         ip = None
@@ -549,6 +656,14 @@ class EmailHeaderParser:
                 domain_match = re.search(r"domain of ([^\s;]+)\s+designates", received_spf_block, re.IGNORECASE)
             if domain_match:
                 domain = domain_match.group(1).lstrip(".*@")
+
+            # Fallback sur Authentication-Results pour smtp.mailfrom
+            if not domain:
+                auth_mailfrom = re.search(r"smtp\.mailfrom=([^\s;]+)", content, re.IGNORECASE)
+                if auth_mailfrom:
+                    domain = auth_mailfrom.group(1)
+                    if "@" in domain:
+                        domain = domain.split("@")[-1]
                 
         # 2. Sinon, vérification dans Authentication-Results
         else:
@@ -578,6 +693,7 @@ class EmailHeaderParser:
     
     def _extract_dkim(self, content: str) -> Dict:
         """Extrait les informations DKIM"""
+        content = self._normalize_header_text(content)
         status = "Not found"
         domain = None
         
@@ -585,6 +701,10 @@ class EmailHeaderParser:
         auth_results_match = re.search(r"Authentication-Results:.*?dkim=([a-zA-Z]+)", content, re.IGNORECASE | re.DOTALL)
         if auth_results_match:
             status = auth_results_match.group(1).capitalize()
+            if not domain:
+                dkim_domain_match = re.search(r"header\.d=([^\s;]+)", content, re.IGNORECASE)
+                if dkim_domain_match:
+                    domain = dkim_domain_match.group(1).strip()
             
         dkim_pattern = r"DKIM-Signature:(.*?)(?=\n[A-Z]|\Z)"
         match = re.search(dkim_pattern, content, re.IGNORECASE | re.DOTALL)
@@ -603,6 +723,7 @@ class EmailHeaderParser:
     
     def _extract_dmarc(self, content: str) -> Dict:
         """Extrait les informations DMARC"""
+        content = self._normalize_header_text(content)
         dmarc_pattern = r"Authentication-Results:.*?dmarc=([a-zA-Z]+)(.*)(?:;|$)"
         match = re.search(dmarc_pattern, content, re.IGNORECASE | re.DOTALL)
         
@@ -624,6 +745,7 @@ class EmailHeaderParser:
     
     def _extract_ips(self, content: str) -> List[str]:
         """Extrait toutes les adresses IP (IPv4 et IPv6)"""
+        content = self._normalize_header_text(content)
         candidates = re.findall(r"[A-Fa-f0-9:\.]+", content)
         ips = []
 
@@ -642,6 +764,7 @@ class EmailHeaderParser:
     
     def _extract_domains(self, content: str) -> List[str]:
         """Extrait les domaines"""
+        content = self._normalize_header_text(content)
         domain_pattern = r"(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z0-9]{2,}"
         domains = re.findall(domain_pattern, content)
         return list(set(domains))
@@ -653,12 +776,14 @@ class EmailHeaderParser:
 
     def _extract_header_block(self, content: str, header_name: str) -> str:
         """Extrait un header complet y compris les lignes continuées"""
+        content = self._normalize_header_text(content)
         pattern = rf"^{re.escape(header_name)}:\s*(.*(?:\n[ \t].*)*)"
         match = re.search(pattern, content, re.IGNORECASE | re.MULTILINE)
         return match.group(1) if match else ""
 
     def _extract_best_ip(self, text: str) -> str:
         """Retourne IPv4 en priorité, sinon IPv6"""
+        text = self._normalize_header_text(text)
         ipv4_match = re.search(
             r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b",
             text
@@ -692,15 +817,25 @@ class EmailHeaderParser:
     
     def _fetch_spf_record(self, content: str) -> str:
         """Essaie de trouver le record SPF"""
+        content = self._normalize_header_text(content)
         spf_pattern = r"v=spf1\s[^\n]*"
         match = re.search(spf_pattern, content, re.IGNORECASE)
         return match.group(0) if match else None
     
     def _extract_dmarc_policy(self, content: str) -> str:
         """Extrait la politique DMARC"""
+        content = self._normalize_header_text(content)
         dmarc_pattern = r"p=(reject|quarantine|none)"
         match = re.search(dmarc_pattern, content, re.IGNORECASE)
         return match.group(1) if match else None
+
+    def _normalize_header_text(self, content: str) -> str:
+        """Normalise le texte de headers (utile pour .msg avec NULs)."""
+        value = content or ""
+        value = value.replace("\x00", "")
+        value = value.replace("\r\n", "\n")
+        value = value.replace("\r", "\n")
+        return value
 
     def _extract_attachments(self, message) -> List[Dict]:
         """Extrait les pièces jointes et calcule leurs hashes"""
