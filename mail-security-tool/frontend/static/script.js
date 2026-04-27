@@ -285,14 +285,18 @@ async function loadDashboard() {
 function renderEmailResult(data) {
     const el = document.getElementById('emailResult');
     const eInfo = data.email || {};
+    const recipientValue = eInfo.to || (eInfo.to_detected && eInfo.to_detected.length > 0 ? eInfo.to_detected[0] : 'N/A');
+    const recipientSource = eInfo.to_source || 'N/A';
+    const senderContact = parseEmailContact(eInfo.from || '');
+    const recipientContact = parseEmailContact(recipientValue || '');
     
     let html = `
         <div class="result-card">
             <div class="result-header"><i class="fa-solid fa-envelope-open"></i> Metadonnées</div>
             <div class="result-body">
                 <div class="stats-grid">
-                    <div class="stat-item"><span class="stat-label">EXPÉDITEUR</span><span class="stat-value">${eInfo.from || 'N/A'}</span></div>
-                    <div class="stat-item"><span class="stat-label">DESTINATAIRE</span><span class="stat-value">${eInfo.to || 'N/A'}</span></div>
+                    <div class="stat-item"><span class="stat-label">EXPÉDITEUR</span><span class="stat-value">${senderContact.name || 'N/A'}</span><div class="text-sm text-muted" style="margin-top:6px; word-break:break-all;">${senderContact.email || 'Email non trouvé'}</div></div>
+                    <div class="stat-item"><span class="stat-label">DESTINATAIRE</span><span class="stat-value">${recipientContact.name || 'N/A'}</span><div class="text-sm text-muted" style="margin-top:6px; word-break:break-all;">${recipientContact.email || 'Email non trouvé'}</div><div class="text-sm text-muted" style="margin-top:6px;">Source: ${recipientSource}</div></div>
                     <div class="stat-item"><span class="stat-label">DATE</span><span class="stat-value">${eInfo.date || 'N/A'}</span></div>
                     <div class="stat-item"><span class="stat-label">SUJET</span><span class="stat-value">${eInfo.subject || 'N/A'}</span></div>
                 </div>
@@ -343,9 +347,98 @@ function renderEmailResult(data) {
         </div>
     `;
 
-    if(data.ips && data.ips.length > 0) {
+    if(data.urls && data.urls.extracted && data.urls.extracted.length > 0) {
+        const urlSummary = data.urls.summary || {};
+        const groupedDomains = data.urls.grouped_domains || [];
+        const redirects = data.urls.redirects || [];
+
         html += `<div class="result-card">
-            <div class="result-header"><i class="fa-solid fa-network-wired"></i> Analyse des Routages (IPs)</div>
+            <div class="result-header"><i class="fa-solid fa-link"></i> Intelligence URL Locale</div>
+            <div class="result-body">
+                <div class="stats-grid">
+                    <div class="stat-item"><span class="stat-label">URLS TROUVÉES</span><span class="stat-value">${urlSummary.total_found || data.urls.extracted.length}</span></div>
+                    <div class="stat-item"><span class="stat-label">URLS UNIQUES</span><span class="stat-value">${urlSummary.unique_urls || 0}</span></div>
+                    <div class="stat-item"><span class="stat-label">REDIRECTIONS TESTÉES</span><span class="stat-value">${urlSummary.redirects_checked || 0}</span></div>
+                </div>
+            </div>
+        </div>`;
+
+        html += `<details class="result-card result-collapsible">
+            <summary class="result-header"><i class="fa-solid fa-sitemap"></i> Regroupement Par Domaine</summary>
+            <div class="result-body">`;
+
+        if(groupedDomains.length === 0) {
+            html += `<div class="stat-item">Aucun domaine regroupable détecté.</div>`;
+        } else {
+            groupedDomains.forEach(group => {
+                html += `<div class="stat-item mb-3" style="margin-bottom:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px;">
+                        <strong class="font-mono text-primary">${group.domain || 'unknown'}</strong>
+                        <span class="badge badge-suspicious">${group.count || 0} URL(s)</span>
+                    </div>
+                    <div style="font-size:0.8rem; color:var(--text-muted); word-break:break-all;">
+                        ${(group.urls || []).slice(0, 3).join('<br>')}
+                    </div>
+                </div>`;
+            });
+        }
+        html += `</div></details>`;
+
+        html += `<details class="result-card result-collapsible">
+            <summary class="result-header"><i class="fa-solid fa-list"></i> URLs Extraites et Normalisées</summary>
+            <div class="result-body">`;
+
+        data.urls.extracted.forEach(item => {
+            html += `<div class="stat-item mb-3" style="margin-bottom:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px;">
+                    <span class="badge badge-neutral">${item.source || 'unknown'}</span>
+                    <span class="text-sm text-muted">${item.root_domain || item.domain || 'N/A'}</span>
+                </div>
+                <div style="font-size:0.8rem; color:var(--text-muted); word-break:break-all; margin-bottom:4px;">
+                    Brut: ${item.original || 'N/A'}
+                </div>
+                <div style="word-break:break-all;">
+                    <a href="${item.normalized}" target="_blank" class="text-primary">${item.normalized}</a>
+                </div>
+            </div>`;
+        });
+
+        html += `</div></details>`;
+
+        html += `<details class="result-card result-collapsible">
+            <summary class="result-header"><i class="fa-solid fa-route"></i> Chaînes de Redirection (sans clic)</summary>
+            <div class="result-body">`;
+
+        if(redirects.length === 0) {
+            html += `<div class="stat-item">Aucune URL à résoudre.</div>`;
+        } else {
+            redirects.forEach(item => {
+                const chain = item.chain || [];
+                const hasError = !!item.error;
+                const chainHtml = chain.map(step => `<div style="word-break:break-all; margin-bottom:4px;">${step}</div>`).join('');
+
+                html += `<div class="stat-item mb-4" style="margin-bottom:14px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px;">
+                        <span class="badge ${hasError ? 'badge-suspicious' : (item.redirected ? 'badge-malicious' : 'badge-clean')}">
+                            ${hasError ? 'Erreur' : (item.redirected ? 'Redirection détectée' : 'Direct')}
+                        </span>
+                        ${item.status_code ? `<span class="text-sm text-muted">HTTP ${item.status_code}</span>` : ''}
+                    </div>
+                    ${hasError ? `<div class="api-error-box">${item.error}</div>` : `<div style="font-size:0.85rem; color:var(--text-muted);">${chainHtml}</div>`}
+                    <div style="margin-top:8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <span class="text-sm">Final:</span>
+                        <a href="${item.final_url}" target="_blank" class="text-primary" style="word-break:break-all;">${item.final_url}</a>
+                    </div>
+                </div>`;
+            });
+        }
+
+        html += `</div></details>`;
+    }
+
+    if(data.ips && data.ips.length > 0) {
+        html += `<details class="result-card result-collapsible">
+            <summary class="result-header"><i class="fa-solid fa-network-wired"></i> Analyse des Routages (IPs)</summary>
             <div class="result-body">`;
             
         data.ips.forEach(ipItem => {
@@ -367,7 +460,7 @@ function renderEmailResult(data) {
                 </div>
             `;
         });
-        html += `</div></div>`;
+        html += `</div></details>`;
     }
 
     // Affiche les pièces jointes si présentes
@@ -377,10 +470,8 @@ function renderEmailResult(data) {
             <div class="result-body">`;
 
         data.attachments.forEach(att => {
-            const vt = att.virustotal || {};
-            
             html += `
-                <div class="stat-item mb-4" style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color);">
+                <div class="stat-item mb-4" style="margin-bottom: 20px;">
                     <div style="margin-bottom: 12px;">
                         <strong><i class="fa-solid fa-file"></i> ${att.filename}</strong>
                         <span class="text-muted text-sm" style="display: block; margin-top: 4px;">Taille: ${formatBytes(att.size)}</span>
@@ -408,36 +499,7 @@ function renderEmailResult(data) {
                         </div>
                     </div>
                 </div>
-                
-                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color);">
-                    <strong style="display: block; margin-bottom: 12px;"><i class="fa-solid fa-bug"></i> Vérification VirusTotal</strong>
             `;
-            
-            ['sha256', 'sha1', 'md5'].forEach(hashType => {
-                const result = vt[hashType] || {};
-                const hashLabel = hashType.toUpperCase();
-                const hashValue = att[hashType];
-                
-                html += `<div class="stat-item" style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);">
-                    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
-                        <strong class="font-mono text-primary">${hashLabel}</strong>
-                        <span class="text-muted text-sm mono" style="word-break:break-all; font-size: 0.85em;">${hashValue}</span>
-                    </div>`;
-                
-                if (result.error) {
-                    html += `<div class="api-error-box">${result.error}</div>`;
-                } else {
-                    html += `
-                        <div style="margin-bottom:10px;">
-                            ${buildVerdictBox(result.verdict, buildVtStats(result.stats))}
-                        </div>
-                    `;
-                }
-                
-                html += `</div>`;
-            });
-            
-            html += `</div>`;
         });
 
         html += `</div></div>`;
@@ -454,6 +516,37 @@ function copyToClipboard(text) {
     }).catch(err => {
         showToast('error', 'Erreur', 'Impossible de copier');
     });
+}
+
+function parseEmailContact(rawValue) {
+    const value = (rawValue || '').trim();
+    if(!value || value === 'N/A') {
+        return { name: 'N/A', email: '' };
+    }
+
+    const angleMatch = value.match(/^(.*)<([^>]+)>$/);
+    if (angleMatch) {
+        const name = angleMatch[1].trim().replace(/^"|"$/g, '');
+        const email = angleMatch[2].trim();
+        return {
+            name: name || email,
+            email: email
+        };
+    }
+
+    const emailMatch = value.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+    if (emailMatch) {
+        const email = emailMatch[0].trim();
+        return {
+            name: email,
+            email: email
+        };
+    }
+
+    return {
+        name: value,
+        email: ''
+    };
 }
 
 function renderAttachmentResult(data) {
@@ -566,10 +659,24 @@ function renderUrlResult(data) {
     if(data.urlscan) {
         html += `<div class="stat-item"><span class="stat-label"><i class="fa-solid fa-camera"></i> URLScan.io</span>`;
         if(data.urlscan.error) html += `<div class="api-error-box">${data.urlscan.error}</div>`;
-        else {
+        else if(data.urlscan.ready) {
+            // Rapport prêt, afficher le lien direct
             html += `<div style="margin-top:15px; text-align:center;">
-                <span class="badge badge-clean">Scan Envoyé</span><br><br>
-                <a href="${data.urlscan.result_url}" target="_blank" class="btn btn-outline" style="font-size:0.8rem; padding: 5px 10px;">Voir le rapport</a>
+                <span class="badge badge-clean"><i class="fa-solid fa-check"></i> Rapport Prêt</span>
+                <p style="margin-top:12px;">
+                    <a href="${data.urlscan.result_url}" target="_blank" class="btn btn-primary" style="display:inline-block; margin-top:8px;">
+                        <i class="fa-solid fa-external-link"></i> Voir le Rapport
+                    </a>
+                </p>
+            </div>`;
+        }
+        else {
+            // Rapport pas prêt (timeout)
+            const scanId = data.urlscan.scan_id || 'unknown';
+            html += `<div style="margin-top:15px; text-align:center;">
+                <span class="badge badge-neutral"><i class="fa-solid fa-hourglass-end"></i> Rapport indisponible</span>
+                <p class="text-sm text-muted" style="margin-top:10px; font-family:var(--font-mono); font-size:0.8rem;">ID: ${scanId}</p>
+                <p class="text-sm" style="margin-top:8px; color:var(--text-muted);">Le rapport n'était pas prêt après 60s. <a href="${data.urlscan.result_url}" target="_blank" style="color:var(--primary);">Réessayer ici</a></p>
             </div>`;
         }
         html += `</div>`;

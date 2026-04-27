@@ -1,29 +1,279 @@
 """
-Parser d'entête email - Extrait SPF, DKIM, DMARC et IPs
+Parser d'entete email - Extrait SPF, DKIM, DMARC, IPs et URLs locales
 """
 import re
 import ipaddress
 import hashlib
+from pathlib import Path
+from html import unescape
+from html.parser import HTMLParser
+from urllib.parse import urlsplit, urlunsplit
 from email.parser import Parser
-from typing import Dict, List, Tuple
+from typing import Dict, List
+
+
+class LocalHTMLURLExtractor(HTMLParser):
+    """Extracteur HTML local: href/src + motifs de redirection JS."""
+
+    def __init__(self):
+        super().__init__()
+        self.urls = []
+
+    def handle_starttag(self, tag, attrs):
+        attr_map = dict(attrs)
+        href = attr_map.get("href")
+        src = attr_map.get("src")
+        if href:
+            self.urls.append(href)
+        if src:
+            self.urls.append(src)
+
+    def handle_data(self, data):
+        # Redirections JavaScript inline usuelles
+        js_patterns = [
+            r"(?:window\.)?location(?:\.href)?\s*=\s*['\"]([^'\"]+)['\"]",
+            r"location\.replace\(\s*['\"]([^'\"]+)['\"]\s*\)",
+            r"location\.assign\(\s*['\"]([^'\"]+)['\"]\s*\)",
+        ]
+        for pattern in js_patterns:
+            for match in re.findall(pattern, data, flags=re.IGNORECASE):
+                self.urls.append(match)
 
 class EmailHeaderParser:
     def __init__(self):
         self.parser = Parser()
     
     def parse_eml_file(self, file_path: str) -> Dict:
-        """Charge et parse un fichier .eml"""
+        """Charge et parse un fichier .eml/.msg."""
+        path = Path(file_path)
+        extension = path.suffix.lower()
+
+        if extension == ".msg":
+            return self._parse_msg_file(path)
+
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             email_content = f.read()
         return self.parse_email_content(email_content)
+
+    def _parse_msg_file(self, file_path: Path) -> Dict:
+        """Parse un fichier Outlook .msg (avec fallback local si lib absente)."""
+        try:
+            import extract_msg  # type: ignore
+        except Exception:
+            return self._parse_msg_file_fallback(file_path)
+
+        msg = extract_msg.Message(str(file_path))
+
+        sender = (getattr(msg, "sender", "") or "").strip()
+        to_header = (getattr(msg, "to", "") or "").strip()
+        subject = (getattr(msg, "subject", "") or "").strip()
+        date_value = getattr(msg, "date", None)
+        date = str(date_value) if date_value else ""
+
+        body_text = (getattr(msg, "body", "") or "")
+        html_body = ""
+        html_raw = getattr(msg, "htmlBody", None)
+        if isinstance(html_raw, bytes):
+            html_body = html_raw.decode("utf-8", errors="ignore")
+        elif isinstance(html_raw, str):
+            html_body = html_raw
+
+        attachments_raw = self._extract_msg_attachments(msg)
+        url_data = self._extract_urls_from_msg_content(body_text, html_body, attachments_raw)
+        attachments = [
+            {k: v for k, v in item.items() if k != "raw_bytes"}
+            for item in attachments_raw
+        ]
+
+        synthetic_raw = "\n".join([
+            f"From: {sender}",
+            f"To: {to_header}",
+            f"Subject: {subject}",
+            f"Date: {date}",
+            body_text,
+            html_body,
+        ])
+
+        received_recipients = self._extract_recipients_from_received_text(synthetic_raw)
+        resolved_to = to_header or (received_recipients[0] if received_recipients else "")
+        to_source = "To" if to_header else ("Received for" if received_recipients else "Unknown")
+
+        return {
+            "from": sender,
+            "to": resolved_to,
+            "to_header": to_header,
+            "to_detected": received_recipients,
+            "to_source": to_source,
+            "subject": subject,
+            "date": date,
+            "spf": self._extract_spf(synthetic_raw),
+            "dkim": self._extract_dkim(synthetic_raw),
+            "dmarc": self._extract_dmarc(synthetic_raw),
+            "ips": self._extract_ips(synthetic_raw),
+            "domains": self._extract_domains(synthetic_raw),
+            "received_from": [],
+            "attachments": attachments,
+            "urls": url_data,
+            "raw_headers": {},
+            "format": "msg"
+        }
+
+    def _parse_msg_file_fallback(self, file_path: Path) -> Dict:
+        """Fallback local sans dépendance externe: extraction best-effort sur bytes .msg."""
+        raw_bytes = file_path.read_bytes()
+        blob = raw_bytes.decode("latin-1", errors="ignore")
+
+        def find_first(pattern: str) -> str:
+            match = re.search(pattern, blob, flags=re.IGNORECASE)
+            return (match.group(1).strip() if match else "")
+
+        sender = find_first(r"From:\s*([^\r\n\x00]+)")
+        to_header = find_first(r"To:\s*([^\r\n\x00]+)")
+        subject = find_first(r"Subject:\s*([^\r\n\x00]+)")
+        date = find_first(r"Date:\s*([^\r\n\x00]+)")
+
+        received_recipients = self._extract_recipients_from_received_text(blob)
+        resolved_to = to_header or (received_recipients[0] if received_recipients else "")
+        to_source = "To" if to_header else ("Received for" if received_recipients else "Unknown")
+
+        url_data = self._extract_urls_from_msg_content(blob, "", [])
+
+        return {
+            "from": sender,
+            "to": resolved_to,
+            "to_header": to_header,
+            "to_detected": received_recipients,
+            "to_source": to_source,
+            "subject": subject,
+            "date": date,
+            "spf": self._extract_spf(blob),
+            "dkim": self._extract_dkim(blob),
+            "dmarc": self._extract_dmarc(blob),
+            "ips": self._extract_ips(blob),
+            "domains": self._extract_domains(blob),
+            "received_from": [],
+            "attachments": [],
+            "urls": url_data,
+            "raw_headers": {},
+            "format": "msg-fallback",
+            "warnings": [
+                "extract_msg non disponible: parsing .msg en mode dégradé"
+            ]
+        }
+
+    def _extract_msg_attachments(self, msg) -> List[Dict]:
+        """Extrait les pièces jointes d'un .msg et calcule les hashes."""
+        attachments = []
+
+        for att in getattr(msg, "attachments", []) or []:
+            filename = (
+                getattr(att, "longFilename", None)
+                or getattr(att, "shortFilename", None)
+                or getattr(att, "filename", None)
+                or "attachment"
+            )
+
+            data = getattr(att, "data", None)
+            if not isinstance(data, (bytes, bytearray)):
+                continue
+
+            payload = bytes(data)
+            attachments.append({
+                "filename": filename,
+                "size": len(payload),
+                "md5": hashlib.md5(payload).hexdigest(),
+                "sha1": hashlib.sha1(payload).hexdigest(),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "content_type": self._guess_mime_from_filename(filename),
+                "raw_bytes": payload,
+            })
+
+        return attachments
+
+    def _extract_urls_from_msg_content(self, body_text: str, body_html: str, attachments: List[Dict]) -> Dict:
+        """Extraction URL locale pour .msg (texte, html, PJ html/pdf)."""
+        extracted = []
+
+        def add_urls(raw_urls: List[str], source: str):
+            for original in raw_urls:
+                normalized = self._normalize_url(original)
+                if not normalized:
+                    continue
+                host = (urlsplit(normalized).hostname or "").lower()
+                root_domain = self._registrable_domain(host)
+                extracted.append({
+                    "original": original,
+                    "normalized": normalized,
+                    "source": source,
+                    "domain": host,
+                    "root_domain": root_domain,
+                })
+
+        add_urls(self._extract_urls_from_text(body_text or ""), "body_text")
+        add_urls(self._extract_urls_from_html(body_html or ""), "body_html")
+
+        for att in attachments:
+            raw = att.get("raw_bytes")
+            if not raw:
+                continue
+
+            filename = att.get("filename", "unknown")
+            content_type = (att.get("content_type") or "").lower()
+
+            if content_type == "text/html" or self._is_html_filename(filename):
+                html = raw.decode("utf-8", errors="ignore")
+                add_urls(self._extract_urls_from_html(html), f"attachment_html:{filename}")
+
+            if content_type == "application/pdf" or self._is_pdf_filename(filename):
+                add_urls(self._extract_urls_from_pdf_bytes(raw), f"attachment_pdf:{filename}")
+
+        deduped = []
+        seen = set()
+        for item in extracted:
+            key = (item["normalized"], item["source"])
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(item)
+
+        return {
+            "items": deduped,
+            "grouped_domains": self._group_urls_by_domain(deduped),
+            "summary": {
+                "total_found": len(deduped),
+                "unique_urls": len({u["normalized"] for u in deduped}),
+                "sources": self._count_by_source(deduped),
+            },
+        }
+
+    @staticmethod
+    def _guess_mime_from_filename(filename: str) -> str:
+        lower = (filename or "").lower()
+        if lower.endswith(".html") or lower.endswith(".htm"):
+            return "text/html"
+        if lower.endswith(".pdf"):
+            return "application/pdf"
+        return "application/octet-stream"
     
     def parse_email_content(self, email_content: str) -> Dict:
         """Parse le contenu brut d'un email"""
         message = self.parser.parsestr(email_content)
+        url_data = self._extract_urls(message, email_content)
+        to_header = message.get("To", "")
+        received_recipients = self._extract_recipients_from_received(message)
+
+        resolved_to = to_header
+        to_source = "To"
+        if not resolved_to and received_recipients:
+            resolved_to = received_recipients[0]
+            to_source = "Received for"
         
         return {
             "from": message.get("From", ""),
-            "to": message.get("To", ""),
+            "to": resolved_to,
+            "to_header": to_header,
+            "to_detected": received_recipients,
+            "to_source": to_source,
             "subject": message.get("Subject", ""),
             "date": message.get("Date", ""),
             "spf": self._extract_spf(email_content),
@@ -33,8 +283,237 @@ class EmailHeaderParser:
             "domains": self._extract_domains(email_content),
             "received_from": self._extract_received_headers(message),
             "attachments": self._extract_attachments(message),
+            "urls": url_data,
             "raw_headers": dict(message.items())
         }
+
+    def _extract_recipients_from_received(self, message) -> List[str]:
+        """Extrait les destinataires visibles dans les entetes Received (clause 'for')."""
+        received_headers = message.get_all("Received", [])
+        content = "\n".join(received_headers)
+        return self._extract_recipients_from_received_text(content)
+
+    def _extract_recipients_from_received_text(self, content: str) -> List[str]:
+        """Extrait les destinataires depuis texte Received via la clause for."""
+        recipients = []
+        pattern = re.compile(
+            r"\bfor\s+<?([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})>?",
+            re.IGNORECASE,
+        )
+        for match in pattern.findall(content or ""):
+            recipients.append(match.strip().lower())
+        return list(dict.fromkeys(recipients))
+
+    def _extract_urls(self, message, raw_content: str) -> Dict:
+        """Extraction locale des URLs (texte, HTML, PJ HTML/PDF) + normalisation."""
+        extracted = []
+
+        def add_urls(raw_urls: List[str], source: str):
+            for original in raw_urls:
+                normalized = self._normalize_url(original)
+                if not normalized:
+                    continue
+                host = (urlsplit(normalized).hostname or "").lower()
+                root_domain = self._registrable_domain(host)
+                extracted.append({
+                    "original": original,
+                    "normalized": normalized,
+                    "source": source,
+                    "domain": host,
+                    "root_domain": root_domain,
+                })
+
+        # A) Corps texte brut global
+        add_urls(self._extract_urls_from_text(raw_content), "body_text")
+
+        # B) Corps MIME text/plain et text/html
+        for part in message.walk():
+            if part.is_multipart():
+                continue
+
+            disposition = part.get_content_disposition()
+            filename = part.get_filename()
+            content_type = (part.get_content_type() or "").lower()
+            payload = part.get_payload(decode=True)
+            if not payload:
+                continue
+
+            charset = part.get_content_charset() or "utf-8"
+            try:
+                text = payload.decode(charset, errors="ignore")
+            except Exception:
+                text = payload.decode("utf-8", errors="ignore")
+
+            is_attachment = disposition == "attachment" or bool(filename)
+
+            if not is_attachment and content_type == "text/plain":
+                add_urls(self._extract_urls_from_text(text), "body_text")
+
+            if not is_attachment and content_type == "text/html":
+                add_urls(self._extract_urls_from_html(text), "body_html")
+
+            # C) PJ HTML
+            if is_attachment and (content_type == "text/html" or self._is_html_filename(filename)):
+                add_urls(self._extract_urls_from_html(text), f"attachment_html:{filename or 'unknown'}")
+
+            # C) PJ PDF: extraction locale de motifs /URI et http(s)
+            if is_attachment and (content_type == "application/pdf" or self._is_pdf_filename(filename)):
+                add_urls(self._extract_urls_from_pdf_bytes(payload), f"attachment_pdf:{filename or 'unknown'}")
+
+        # Dedup par (normalized, source)
+        deduped = []
+        seen = set()
+        for item in extracted:
+            key = (item["normalized"], item["source"])
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(item)
+
+        return {
+            "items": deduped,
+            "grouped_domains": self._group_urls_by_domain(deduped),
+            "summary": {
+                "total_found": len(deduped),
+                "unique_urls": len({u["normalized"] for u in deduped}),
+                "sources": self._count_by_source(deduped),
+            },
+        }
+
+    def _extract_urls_from_text(self, text: str) -> List[str]:
+        """Extrait des URLs depuis du texte brut (http, https, hxxp, www)."""
+        pattern = re.compile(
+            r"(?i)\b(?:hxxps?://|https?://|www\.)[^\s<>'\"\]\)]+"
+        )
+        return [m.group(0) for m in pattern.finditer(text or "")]
+
+    def _extract_urls_from_html(self, html: str) -> List[str]:
+        """Parse du HTML local pour href/src + redirections JS inline."""
+        extractor = LocalHTMLURLExtractor()
+        try:
+            extractor.feed(html or "")
+        except Exception:
+            pass
+
+        # Complete avec URLs en texte libre dans le HTML
+        extractor.urls.extend(self._extract_urls_from_text(html or ""))
+        return extractor.urls
+
+    def _extract_urls_from_pdf_bytes(self, content: bytes) -> List[str]:
+        """Extraction locale de motifs URL dans bytes PDF, sans rendu navigateur."""
+        urls = []
+
+        for match in re.findall(rb"/URI\s*\((.*?)\)", content, flags=re.IGNORECASE):
+            try:
+                urls.append(match.decode("latin-1", errors="ignore"))
+            except Exception:
+                continue
+
+        try:
+            as_text = content.decode("latin-1", errors="ignore")
+        except Exception:
+            as_text = ""
+
+        urls.extend(self._extract_urls_from_text(as_text))
+        return urls
+
+    def _normalize_url(self, value: str) -> str:
+        """Normalisation locale anti-obfuscation (hxxp, [.] etc.)."""
+        if not value:
+            return ""
+
+        cleaned = unescape(value.strip())
+        cleaned = cleaned.strip(" \t\r\n\"'`<>()[]{}")
+
+        # Defang courant
+        cleaned = re.sub(r"(?i)^hxxps://", "https://", cleaned)
+        cleaned = re.sub(r"(?i)^hxxp://", "http://", cleaned)
+        cleaned = re.sub(r"\[(?:\.|dot)\]", ".", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\((?:\.|dot)\)", ".", cleaned, flags=re.IGNORECASE)
+        cleaned = cleaned.replace("{.}", ".")
+        cleaned = cleaned.replace("[://]", "://")
+
+        # Nettoie ponctuation terminale
+        cleaned = cleaned.rstrip(".,;:!?)]}")
+
+        if cleaned.lower().startswith("www."):
+            cleaned = f"http://{cleaned}"
+
+        if not re.match(r"(?i)^https?://", cleaned):
+            # Domaine nu
+            if re.match(r"(?i)^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(/.*)?$", cleaned):
+                cleaned = f"http://{cleaned}"
+            else:
+                return ""
+
+        try:
+            split = urlsplit(cleaned)
+        except Exception:
+            return ""
+
+        if split.scheme not in {"http", "https"}:
+            return ""
+        if not split.netloc:
+            return ""
+
+        # Normalise scheme/host en minuscule
+        normalized = urlunsplit((
+            split.scheme.lower(),
+            split.netloc.lower(),
+            split.path or "",
+            split.query or "",
+            "",
+        ))
+        return normalized
+
+    def _registrable_domain(self, hostname: str) -> str:
+        """Approximation locale du domaine racine (sans tldextract)."""
+        if not hostname:
+            return ""
+
+        parts = hostname.split(".")
+        if len(parts) <= 2:
+            return hostname
+
+        second_level_markers = {"co", "com", "org", "net", "gov", "edu", "ac"}
+        if len(parts[-1]) == 2 and parts[-2] in second_level_markers and len(parts) >= 3:
+            return ".".join(parts[-3:])
+
+        return ".".join(parts[-2:])
+
+    def _group_urls_by_domain(self, items: List[Dict]) -> List[Dict]:
+        grouped = {}
+        for item in items:
+            key = item.get("root_domain") or item.get("domain") or "unknown"
+            bucket = grouped.setdefault(key, {"domain": key, "count": 0, "urls": []})
+            bucket["count"] += 1
+            bucket["urls"].append(item.get("normalized"))
+
+        result = []
+        for _, group in grouped.items():
+            group["urls"] = sorted(list(dict.fromkeys(group["urls"])))
+            result.append(group)
+
+        result.sort(key=lambda x: x["count"], reverse=True)
+        return result
+
+    def _count_by_source(self, items: List[Dict]) -> Dict:
+        counter = {}
+        for item in items:
+            src = item.get("source", "unknown")
+            counter[src] = counter.get(src, 0) + 1
+        return counter
+
+    @staticmethod
+    def _is_html_filename(filename: str) -> bool:
+        if not filename:
+            return False
+        lower = filename.lower()
+        return lower.endswith(".html") or lower.endswith(".htm")
+
+    @staticmethod
+    def _is_pdf_filename(filename: str) -> bool:
+        return bool(filename and filename.lower().endswith(".pdf"))
     
     def _extract_spf(self, content: str) -> Dict:
         """Extrait les informations SPF, le domaine et l'IP"""

@@ -724,6 +724,28 @@ body {
     filter: drop-shadow(0 0 8px var(--primary-glow));
 }
 
+.result-collapsible > .result-header {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+}
+
+.result-collapsible > .result-header::-webkit-details-marker {
+    display: none;
+}
+
+.result-collapsible > .result-header::after {
+    content: '▸';
+    margin-left: auto;
+    color: var(--primary);
+    font-size: 1rem;
+    transition: transform 0.2s ease;
+}
+
+.result-collapsible[open] > .result-header::after {
+    transform: rotate(90deg);
+}
+
 .result-body {
     padding: 28px;
 }

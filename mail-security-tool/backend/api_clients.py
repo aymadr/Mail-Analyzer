@@ -170,13 +170,15 @@ class URLScanIOClient(APIClient):
     """Client URLScan.io pour analyser URLs"""
     
     BASE_URL = "https://urlscan.io/api/v1"
+    REPORT_WAIT_TIMEOUT = 60  # Attendre max 60 secondes
+    REPORT_CHECK_INTERVAL = 2  # Vérifier toutes les 2 secondes
     
     def __init__(self):
         self.api_key = URLSCAN_API_KEY
         self.headers = {"API-Key": self.api_key, "Content-Type": "application/json"}
     
     def scan_url(self, url: str) -> Dict:
-        """Lance une analyse d'URL"""
+        """Lance une analyse d'URL et attend que le rapport soit prêt"""
         if not self.api_key:
             return {"error": "URLScan API key not configured"}
         
@@ -191,15 +193,46 @@ class URLScanIOClient(APIClient):
             response.raise_for_status()
             data = response.json()
             
+            scan_id = data.get("uuid")
+            result_url = data.get("result")
+            report_url = data.get("report")
+            
+            # Attendre que le rapport soit prêt
+            is_ready = self._wait_for_report(result_url)
+            
             return {
                 "source": "URLScan.io",
                 "url": url,
-                "scan_id": data.get("uuid"),
-                "result_url": data.get("result"),
-                "report_url": data.get("report")
+                "scan_id": scan_id,
+                "result_url": result_url,
+                "report_url": report_url,
+                "ready": is_ready
             }
         except Exception as e:
             return {"error": str(e), "source": "URLScan.io"}
+    
+    def _wait_for_report(self, result_url: str, timeout: int = REPORT_WAIT_TIMEOUT) -> bool:
+        """Attend que le rapport soit disponible sur result_url"""
+        elapsed = 0
+        while elapsed < timeout:
+            try:
+                # Faire une requête HEAD pour vérifier que le rapport existe
+                response = requests.head(
+                    result_url,
+                    timeout=API_TIMEOUT
+                )
+                # Si on reçoit 200, le rapport est prêt
+                if response.status_code == 200:
+                    return True
+            except Exception:
+                pass
+            
+            # Attendre avant prochain essai
+            time.sleep(self.REPORT_CHECK_INTERVAL)
+            elapsed += self.REPORT_CHECK_INTERVAL
+        
+        # Timeout atteint
+        return False
     
     def get_result(self, scan_uuid: str) -> Dict:
         """Récupère les résultats d'un scan"""
