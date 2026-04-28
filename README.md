@@ -1,6 +1,42 @@
 # Mail Security Analyzer 🔒
 
-Outil d'analyse de sécurité email centralisé intégrant VirusTotal, URLScan.io et AbuseIPDB.
+Outil d'analyse de sécurité email centralisé intégrant VirusTotal, URLScan.io, AbuseIPDB et Scamdoc (ScamPredictor via RapidAPI).
+
+## Aperçu
+
+### 📊 Dashboard Principal
+<div align="center">
+  <img src="mail-security-tool/src/dashboard.png" alt="Dashboard SecAnalyze" width="90%" style="border-radius: 8px; margin: 15px 0;">
+</div>
+
+### 📧 Analyse d'Email
+<div align="center">
+  <img src="mail-security-tool/src/AE1.png" alt="Email Analysis 1" width="45%" style="border-radius: 8px; margin: 10px;">
+  <img src="mail-security-tool/src/AE2.png" alt="Email Analysis 2" width="45%" style="border-radius: 8px; margin: 10px;">
+  <img src="mail-security-tool/src/AE3.png" alt="Email Analysis 3" width="90%" style="border-radius: 8px; margin: 15px 0;">
+</div>
+
+### 📁 Analyse de Pièce Jointe
+<div align="center">
+  <img src="mail-security-tool/src/PJ1.png" alt="Attachment 1" width="45%" style="border-radius: 8px; margin: 10px;">
+  <img src="mail-security-tool/src/PJ2.png" alt="Attachment 2" width="45%" style="border-radius: 8px; margin: 10px;">
+  <img src="mail-security-tool/src/PJ3.png" alt="Attachment 3" width="90%" style="border-radius: 8px; margin: 15px 0;">
+</div>
+
+### 🔗 Analyse d'URL
+<div align="center">
+  <img src="mail-security-tool/src/AU.png" alt="URL Analysis" width="90%" style="border-radius: 8px; margin: 15px 0;">
+</div>
+
+### 🖥️ Analyse d'IP
+<div align="center">
+  <img src="mail-security-tool/src/IP.png" alt="IP Analysis" width="90%" style="border-radius: 8px; margin: 15px 0;">
+</div>
+
+### 📜 Historique
+<div align="center">
+  <img src="mail-security-tool/src/hISTORIQUE.png" alt="History" width="90%" style="border-radius: 8px; margin: 15px 0;">
+</div>
 
 ## 🎯 Fonctionnalités
 
@@ -8,8 +44,9 @@ Outil d'analyse de sécurité email centralisé intégrant VirusTotal, URLScan.i
 - ✅ **Extraction d'informations** : IPs, domaines, en-têtes
 - ✅ **Calcul de hash** : MD5, SHA1, SHA256
 - ✅ **Analyse de pièces jointes** : Vérification VirusTotal
-- ✅ **Analyse d'URLs** : Vérification VirusTotal + URLScan.io
+- ✅ **Analyse d'URLs** : Vérification VirusTotal + URLScan.io + Scamdoc
 - ✅ **Analyse d'IPs** : VirusTotal + AbuseIPDB
+- ✅ **Scoring Scamdoc** : Trust Score et Risk Score pour domaines/URLs
 - ✅ **Base de données** : Cache local SQLite
 - ✅ **Interface web** : Dashboard moderne et intuitif
 
@@ -21,7 +58,7 @@ mail-security-tool/
 │   ├── config.py              # Configuration centralisée
 │   ├── email_parser.py        # Parser d'entête email
 │   ├── hash_calculator.py     # Calcul de hash
-│   ├── api_clients.py         # Clients API (VT, URLScan, AbuseIPDB)
+│   ├── api_clients.py         # Clients API (VT, URLScan, AbuseIPDB, Scamdoc)
 │   ├── database.py            # Gestion SQLite
 │   └── analyzer.py            # Orchestrateur principal
 ├── frontend/
@@ -37,48 +74,83 @@ mail-security-tool/
 └── README.md                  # Ce fichier
 ```
 
-## 🚀 Installation
+## 🚀 Démarrage Rapide - Deux Options
+
+Pour en savoir plus sur l'installation, notamment des clés API: ** Consulte le guide complet : [INSTALLATION.md](mail-security-tool/INSTALLATION.md)**
+
+### ✅ Option 1: Double-clic sur run.bat (Only Windows)
+
+```
+Double-cliquer sur: run.bat
+```
+
+
+- Crée automatiquement l'environnement virtuel
+- Installe les dépendances
+- Démarre le serveur Flask
+- Accès: http://127.0.0.1:5000
+
+### ✅ Option 2: Docker (Windows/Mac/Linux)
+
+**Prérequis:** Docker Desktop installé
+
+```powershell
+# 1. Éditer .env avec tes clés API
+copy .env.example .env
+
+# 2. Démarrer
+docker compose up --build -d
+
+# 3. Ouvrir http://127.0.0.1:5000
+```
+
+---
+
+## 🚀 Installation Détaillée 
 
 ### Prérequis
+- Windows 10/11
 - Python 3.8+
 - pip
 
-### Étapes
+### Étapes Manuelles
 
-1. **Cloner/télécharger le projet**
-   ```bash
+1. **Télécharger le projet**
+   ```powershell
    cd mail-security-tool
    ```
 
 2. **Créer un environnement virtuel**
-   ```bash
+   ```powershell
    python -m venv venv
-   source venv/Scripts/activate  # Windows
-   # ou
-   source venv/bin/activate      # Linux/Mac
    ```
 
-3. **Installer les dépendances**
-   ```bash
+3. **Activer l'environnement virtuel**
+   ```powershell
+   .\venv\Scripts\Activate.ps1
+   ```
+
+4. **Installer les dépendances**
+   ```powershell
    pip install -r requirements.txt
    ```
 
-4. **Configurer les clés API**
+5. **Configurer les clés API**
    - Éditer le fichier `.env`
-   - Ajouter tes clés API VirusTotal, URLScan.io, AbuseIPDB
+   - Ajouter tes clés API VirusTotal, URLScan.io, AbuseIPDB, Scamdoc (RapidAPI)
 
    **Obtenir les clés API :**
    - [VirusTotal](https://www.virustotal.com/gui/home/upload)
    - [URLScan.io](https://urlscan.io/)
    - [AbuseIPDB](https://www.abuseipdb.com/)
+   - [ScamPredictor (RapidAPI)](https://rapidapi.com/)
 
-5. **Lancer l'application**
-   ```bash
-   cd frontend
-   python app.py
+6. **Lancer l'application**
+   ```powershell
+   python run.py
    ```
 
-6. **Accéder à l'interface**
+7. **Accéder à l'interface**
    - Ouvrir navigateur: `http://127.0.0.1:5000`
 
 ## 🐳 Pourquoi Docker ?
@@ -100,9 +172,10 @@ Le stack Docker du projet:
 ### 1. Analyse d'Email
 - Charger un fichier `.eml` ou `.msg`
 - Le système parse automatiquement:
-  - En-têtes SPF, DKIM, DMARC
-  - IPs et domaines
-  - Vérifie les IPs sur VirusTotal et AbuseIPDB
+   - En-têtes SPF, DKIM, DMARC
+   - IPs et domaines
+   - Vérifie les IPs sur VirusTotal et AbuseIPDB
+   - Vérifie les domaines/URLs extraits via Scamdoc
 
 #### Analyse des Routages (IPs)
 Dans le rapport d'analyse email, la section **Analyse des Routages (IPs)** affiche le chemin technique du message à partir des en-têtes mail.
@@ -125,8 +198,8 @@ Note: ce n'est pas un traceroute réseau en direct. L'analyse est basée sur les
 
 ### 3. Analyse d'URL
 - Entrer une URL
-- Analyse via VirusTotal et URLScan.io
-- Affiche le verdict et les détails
+- Analyse via VirusTotal, URLScan.io et Scamdoc
+- Affiche le verdict et les détails (dont Trust Score et Risk Score Scamdoc)
 
 ### 4. Analyse d'IP
 - Entrer une adresse IP
@@ -153,6 +226,7 @@ DB_PATH = "chemin/vers/ma/bdd.db"
 VIRUSTOTAL_RATE_LIMIT = 4    # 4 req/min
 URLSCAN_RATE_LIMIT = 1       # 1 req/s
 ABUSEIPDB_RATE_LIMIT = 1     # 1 req/s
+SCAMDOC_RATE_LIMIT = 1       # 1 req/s
 ```
 
 ## 📝 API Endpoints
@@ -219,8 +293,7 @@ python app.py --port 5001
 - [ ] Dashboard analytics
 - [ ] Intégration Slack/Email pour alertes
 - [ ] Support multi-threading
-- [ ] Docker container
-- [ ] Tests unitaires
+- [ ] Intégration d'un agent pour détecter les patterns de texte
 
 ## 📄 License
 
@@ -231,5 +304,3 @@ MIT
 Pour des questions ou améliorations, n'hésite pas à me contacter !
 
 ---
-
-**Dernière mise à jour:** Avril 2026
