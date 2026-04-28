@@ -44,6 +44,10 @@
                     <i class="fa-solid fa-server"></i>
                     <span>Adresse IP</span>
                 </button>
+                <button class="nav-item" data-tab="text">
+                    <i class="fa-solid fa-file-lines"></i>
+                    <span>Analyser Texte</span>
+                </button>
                 
                 <div class="nav-divider"></div>
                 <div class="nav-header">LOGS & DONNÉES</div>
@@ -210,6 +214,25 @@
                     <div id="ipResult" class="results-area mt-4"></div>
                 </section>
 
+                <!-- Tab: ANALYSE TEXTE -->
+                <section id="text" class="view-panel hidden">
+                    <div class="card glass-card">
+                        <form id="textForm" class="input-form">
+                            <div class="input-group">
+                                <label for="textInput"><i class="fa-solid fa-file-lines"></i> Contenu à analyser</label>
+                                <p class="help-text">Collez le corps du mail pour détecter les patterns de phishing (formules, fautes, URLs suspectes, etc.)</p>
+                                <textarea id="textInput" placeholder="Collez ici le contenu d'un email..." class="text-input text-area" rows="10" required></textarea>
+                            </div>
+                            <div class="action-bar">
+                                <button type="submit" class="btn btn-primary btn-glow" id="textBtn">
+                                    <i class="fa-solid fa-magnifying-glass"></i> Analyser le Texte
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    <div id="textResult" class="results-area mt-4"></div>
+                </section>
+
                 <!-- Tab: HISTORY -->
                 <section id="history" class="view-panel hidden">
                     <div class="card glass-card p-0">
@@ -241,5 +264,6 @@
     <div id="toast-container" class="toast-container"></div>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script src="{{ url_for('static', filename='script-phishing.js') }}"></script>
 </body>
 </html>

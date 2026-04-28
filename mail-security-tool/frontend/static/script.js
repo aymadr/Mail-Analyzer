@@ -9,6 +9,7 @@ const tabConfig = {
     attachment: { title: "Sandbox Pièce Jointe", desc: "Calcul de Hash (SHA256, MD5) & Vérification Virustotal" },
     url: { title: "Scanner d'URL", desc: "Vérification réputation VirusTotal, Scamdoc et empreinte URLScan" },
     ip: { title: "Threat Intel IP", desc: "Consultation croisée VirusTotal & AbuseIPDB" },
+    text: { title: "Analyse de Texte", desc: "Détecte les patterns de phishing: formules, fautes, URLs suspectes" },
     history: { title: "Historique des Analyses", desc: "Archives des analyses enregistrées dans la DB locale avec filtres" }
 };
 
@@ -24,6 +25,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Load dashboard on startup
     loadDashboard();
+    
+    // Form event listeners
+    document.getElementById('textForm').addEventListener('submit', analyzeText);
 });
 
 // Function to programmatically switch tabs

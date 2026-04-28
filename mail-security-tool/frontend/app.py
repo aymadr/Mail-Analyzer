@@ -12,6 +12,7 @@ from werkzeug.utils import secure_filename
 import os
 import ipaddress
 from analyzer import SecurityAnalyzer
+from phishing_detector import PhishingTextAnalyzer
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max
@@ -22,6 +23,7 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 Path(app.config['UPLOAD_FOLDER']).mkdir(exist_ok=True)
 
 analyzer = SecurityAnalyzer()
+phishing_analyzer = PhishingTextAnalyzer()
 
 ALLOWED_EXTENSIONS = {'eml', 'msg', 'exe', 'dll', 'doc', 'docx', 'pdf', 'zip', 'rar', 'txt'}
 
@@ -163,6 +165,64 @@ def get_report(email_hash):
     if report:
         return jsonify(report)
     return jsonify({"error": "Rapport non trouvé"}), 404
+
+@app.route('/api/analyze/text', methods=['POST'])
+def analyze_text():
+    """Analyse un contenu texte pour détecter les patterns de phishing"""
+    data = request.get_json()
+    text = data.get('text', '').strip() if data else ''
+    
+    if not text:
+        return jsonify({"error": "Texte vide"}), 400
+    
+    try:
+        # Analyse de phishing basée sur le texte
+        text_analysis = phishing_analyzer.analyze(text)
+        
+        # Analyser les URLs si présentes via les APIs
+        url_analyses = []
+        for url in text_analysis.get("urls", [])[:5]:  # Limiter à 5 URLs
+            try:
+                url_analysis = {
+                    "url": url,
+                    "scamdoc": analyzer.scamdoc_client.check_url(url),
+                    "virustotal": analyzer.vt_client.check_url(url)
+                }
+                url_analyses.append(url_analysis)
+            except Exception as e:
+                url_analyses.append({"url": url, "error": str(e)})
+        
+        # Analyser les domaines des emails
+        email_analyses = []
+        for email in text_analysis.get("emails", [])[:5]:
+            domain = email.split("@")[1] if "@" in email else ""
+            if domain:
+                try:
+                    email_analysis = {
+                        "email": email,
+                        "domain": domain,
+                        "scamdoc": analyzer.scamdoc_client.check_url(f"https://{domain}")
+                    }
+                    email_analyses.append(email_analysis)
+                except Exception as e:
+                    email_analyses.append({"email": email, "error": str(e)})
+        
+        result = {
+            "text_analysis": text_analysis,
+            "urls_analysis": url_analyses,
+            "emails_analysis": email_analyses,
+            "summary": {
+                "overall_verdict": text_analysis.get("verdict"),
+                "risk_score": text_analysis.get("score"),
+                "urls_checked": len(url_analyses),
+                "emails_found": len(email_analyses)
+            }
+        }
+        
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 @app.errorhandler(404)
 def not_found(error):
