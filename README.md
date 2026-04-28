@@ -2,6 +2,42 @@
 
 Outil d'analyse de sécurité email centralisé intégrant VirusTotal, URLScan.io, AbuseIPDB et Scamdoc (ScamPredictor via RapidAPI).
 
+## Aperçu
+
+### 📊 Dashboard Principal
+<div align="center">
+  <img src="mail-security-tool/src/dashboard.png" alt="Dashboard SecAnalyze" width="90%" style="border-radius: 8px; margin: 15px 0;">
+</div>
+
+### 📧 Analyse d'Email
+<div align="center">
+  <img src="mail-security-tool/src/AE1.png" alt="Email Analysis 1" width="45%" style="border-radius: 8px; margin: 10px;">
+  <img src="mail-security-tool/src/AE2.png" alt="Email Analysis 2" width="45%" style="border-radius: 8px; margin: 10px;">
+  <img src="mail-security-tool/src/AE3.png" alt="Email Analysis 3" width="90%" style="border-radius: 8px; margin: 15px 0;">
+</div>
+
+### 📁 Analyse de Pièce Jointe
+<div align="center">
+  <img src="mail-security-tool/src/PJ1.png" alt="Attachment 1" width="45%" style="border-radius: 8px; margin: 10px;">
+  <img src="mail-security-tool/src/PJ2.png" alt="Attachment 2" width="45%" style="border-radius: 8px; margin: 10px;">
+  <img src="mail-security-tool/src/PJ3.png" alt="Attachment 3" width="90%" style="border-radius: 8px; margin: 15px 0;">
+</div>
+
+### 🔗 Analyse d'URL
+<div align="center">
+  <img src="mail-security-tool/src/AU.png" alt="URL Analysis" width="90%" style="border-radius: 8px; margin: 15px 0;">
+</div>
+
+### 🖥️ Analyse d'IP
+<div align="center">
+  <img src="mail-security-tool/src/IP.png" alt="IP Analysis" width="90%" style="border-radius: 8px; margin: 15px 0;">
+</div>
+
+### 📜 Historique
+<div align="center">
+  <img src="mail-security-tool/src/hISTORIQUE.png" alt="History" width="90%" style="border-radius: 8px; margin: 15px 0;">
+</div>
+
 ## 🎯 Fonctionnalités
 
 - ✅ **Analyse d'email** : Parse entête SPF, DKIM, DMARC
