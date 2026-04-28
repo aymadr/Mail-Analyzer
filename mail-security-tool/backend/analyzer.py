@@ -7,7 +7,7 @@ import requests
 from urllib.parse import urlparse
 from email_parser import EmailHeaderParser
 from hash_calculator import HashCalculator
-from api_clients import VirusTotalClient, URLScanIOClient, AbuseIPDBClient
+from api_clients import VirusTotalClient, URLScanIOClient, AbuseIPDBClient, AnyRunClient
 from database import Database
 from typing import Dict, List
 
@@ -20,6 +20,7 @@ class SecurityAnalyzer:
         self.vt_client = VirusTotalClient()
         self.urlscan_client = URLScanIOClient()
         self.abuseipdb_client = AbuseIPDBClient()
+        self.anyrun_client = AnyRunClient()
         self.db = Database()
     
     def analyze_email_file(self, file_path: str) -> Dict:
@@ -102,6 +103,19 @@ class SecurityAnalyzer:
             vt_result = self.vt_client.check_file_hash(hashes[hash_type])
             results["virustotal"][hash_type] = vt_result
             self.db.save_file_hash_analysis(hashes[hash_type], hash_type, vt_result)
+
+        # Optionnel: soumettre le fichier à Any.Run (si activé/configuré)
+        try:
+            anyrun_result = self.anyrun_client.submit_file(file_path)
+        except Exception as e:
+            anyrun_result = {"error": str(e), "source": "AnyRun"}
+
+        results["anyrun"] = anyrun_result
+        # Sauvegarde succincte du résultat Any.Run sous le hash SHA256
+        try:
+            self.db.save_file_hash_analysis(hashes['sha256'], 'anyrun', anyrun_result)
+        except Exception:
+            pass
         
         return results
     

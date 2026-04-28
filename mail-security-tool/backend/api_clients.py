@@ -5,9 +5,14 @@ import requests
 import time
 import base64
 from typing import Dict, Optional
+from pathlib import Path
 from config import (
     VIRUSTOTAL_API_KEY, URLSCAN_API_KEY, ABUSEIPDB_API_KEY,
     API_TIMEOUT, MAX_RETRIES
+)
+from config import (
+    ANYRUN_ENABLED, ANYRUN_API_KEY, ANYRUN_BASE_URL,
+    ANYRUN_SUBMIT_PATH, ANYRUN_REPORT_PATH, ANYRUN_MAX_FILESIZE_MB
 )
 
 class APIClient:
@@ -306,6 +311,88 @@ class AbuseIPDBClient(APIClient):
             }
         except Exception as e:
             return {"error": str(e), "source": "AbuseIPDB"}
+
+
+class AnyRunClient(APIClient):
+    """Client minimal pour Any.Run (configurable via .env).
+
+    NOTE: Any.Run a des API propriétaires; ici on fournit une intégration
+    générique basée sur `ANYRUN_BASE_URL` et chemins configurables.
+    Ajuste `ANYRUN_SUBMIT_PATH` et `ANYRUN_REPORT_PATH` dans `.env` si
+    nécessaire pour correspondre à l'API réelle.
+    """
+
+    def __init__(self):
+        self.enabled = bool(ANYRUN_ENABLED)
+        self.api_key = ANYRUN_API_KEY
+        self.base_url = ANYRUN_BASE_URL.rstrip("/")
+        self.submit_path = ANYRUN_SUBMIT_PATH
+        self.report_path = ANYRUN_REPORT_PATH
+        self.max_filesize_mb = ANYRUN_MAX_FILESIZE_MB
+
+    def _url(self, path: str) -> str:
+        return f"{self.base_url}{path}"
+
+    def submit_file(self, file_path: str, metadata: Optional[Dict] = None) -> Dict:
+        """Soumet un fichier à Any.Run. Retourne le JSON de la réponse ou une erreur."""
+        if not self.enabled:
+            return {"error": "Any.Run integration disabled", "source": "AnyRun"}
+        if not self.api_key:
+            return {"error": "Any.Run API key not configured", "source": "AnyRun"}
+
+        try:
+            size_mb = Path(file_path).stat().st_size / (1024 * 1024)
+            if size_mb > self.max_filesize_mb:
+                return {"error": f"File too large for Any.Run (>{self.max_filesize_mb} MB)", "source": "AnyRun"}
+        except Exception:
+            pass
+
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        files = {"file": open(file_path, "rb")}
+        data = metadata or {}
+
+        try:
+            resp = requests.post(self._url(self.submit_path), headers=headers, files=files, data=data, timeout=API_TIMEOUT)
+            files["file"].close()
+            resp.raise_for_status()
+            return {"source": "AnyRun", "response": resp.json()}
+        except Exception as e:
+            return {"error": str(e), "source": "AnyRun"}
+
+    def submit_url(self, url: str, metadata: Optional[Dict] = None) -> Dict:
+        """Soumet une URL pour analyse dynamique (si supporté)."""
+        if not self.enabled:
+            return {"error": "Any.Run integration disabled", "source": "AnyRun"}
+        if not self.api_key:
+            return {"error": "Any.Run API key not configured", "source": "AnyRun"}
+
+        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        payload = {"url": url}
+        if metadata:
+            payload.update(metadata)
+
+        try:
+            resp = requests.post(self._url(self.submit_path), headers=headers, json=payload, timeout=API_TIMEOUT)
+            resp.raise_for_status()
+            return {"source": "AnyRun", "response": resp.json()}
+        except Exception as e:
+            return {"error": str(e), "source": "AnyRun"}
+
+    def get_report(self, task_id: str) -> Dict:
+        """Récupère le rapport d'un job Any.Run via le chemin configuré."""
+        if not self.enabled:
+            return {"error": "Any.Run integration disabled", "source": "AnyRun"}
+        if not self.api_key:
+            return {"error": "Any.Run API key not configured", "source": "AnyRun"}
+
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        try:
+            path = self.report_path.format(task_id=task_id)
+            resp = requests.get(self._url(path), headers=headers, timeout=API_TIMEOUT)
+            resp.raise_for_status()
+            return {"source": "AnyRun", "report": resp.json()}
+        except Exception as e:
+            return {"error": str(e), "source": "AnyRun"}
 
 
 if __name__ == "__main__":
