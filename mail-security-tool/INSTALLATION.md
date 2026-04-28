@@ -1,73 +1,87 @@
-# Installation et Utilisation
+# Installation et Utilisation - Windows Only
 
 ## 🚀 Démarrage Rapide
 
-### Option 1: Interface Web (Recommandée)
+### ✅ Option 1: Interface Web (Recommandée)
 
-```bash
-# 1. Cloner/télécharger le projet
+**Méthode 1A - Double-cliquer sur `run.bat` (le plus simple)**
+```batch
+run.bat
+```
+→ L'application démarre automatiquement sur http://127.0.0.1:5000
+
+**Méthode 1B - Via PowerShell**
+```powershell
+# 1. Aller au dossier du projet
 cd mail-security-tool
 
-# 2. Créer environnement virtuel
-python -m venv venv
-# Windows PowerShell
+# 2. Activer l'environnement virtuel
 .\venv\Scripts\Activate.ps1
-# Windows CMD
-venv\Scripts\activate.bat
-# Linux/Mac
-source venv/bin/activate
 
-# 3. Installer les dépendances
+# 3. Installer les dépendances (première fois seulement)
 pip install -r requirements.txt
 
-# 4. Configurer les API keys dans .env
-nano .env  # éditer avec tes clés
+# 4. Configurer les clés API
+# Éditer le fichier .env avec tes clés VirusTotal, URLScan, AbuseIPDB, Scamdoc
 
 # 5. Lancer l'application
 python run.py
-# ou
-cd frontend && python app.py
-
-# 6. Ouvrir le navigateur
-# http://127.0.0.1:5000
 ```
 
-### Option 1 bis: Lancement avec Docker (clone puis run)
+**Méthode 1C - Via CMD (Invite de commande)**
+```batch
+REM 1. Aller au dossier
+cd mail-security-tool
 
-Oui, le flux est bien: **cloner le projet GitHub**, puis **lancer Docker**.
+REM 2. Activer l'environnement virtuel
+venv\Scripts\activate.bat
 
-```bash
-# 1. Cloner le repo
-git clone <URL_DU_REPO>
+REM 3. Installer les dépendances (première fois seulement)
+pip install -r requirements.txt
+
+REM 4. Éditer .env avec tes clés API
+
+REM 5. Lancer
+python run.py
+```
+
+→ L'application démarre sur http://127.0.0.1:5000
+
+### 🐳 Option 2: Docker
+
+**Prérequis:** Docker Desktop installé sur Windows
+
+```powershell
+# 1. Aller au dossier du projet
 cd mail-security-tool
 
 # 2. Préparer les variables d'environnement
-cp .env.example .env
-# puis éditer .env avec les clés API
+copy .env.example .env
+# Puis éditer .env avec tes clés API
 
 # 3. Construire et démarrer le conteneur
 docker compose up --build -d
 
-# 4. Ouvrir l'interface
-# http://127.0.0.1:5000
+# 4. Ouvrir http://127.0.0.1:5000
 ```
 
-Commandes utiles:
-```bash
+Commandes Docker utiles:
+```powershell
 # Voir les logs
 docker compose logs -f
 
 # Arrêter les services
 docker compose down
+
+# Afficher les conteneurs en cours
+docker ps
 ```
 
-### Option 2: Ligne de Commande (CLI)
+### 💻 Option 3: Ligne de Commande (CLI)
 
-```bash
-# Active d'abord l'environnement virtuel
-# Windows PowerShell: .\venv\Scripts\Activate.ps1
-# Windows CMD: venv\Scripts\activate.bat
-# Linux/Mac: source venv/bin/activate
+```powershell
+# Activer l'environnement virtuel
+.\venv\Scripts\Activate.ps1
 
 # Analyser un email
 python cli.py --email mon_email.eml
@@ -82,21 +96,13 @@ python cli.py --url https://suspicious.com
 python cli.py --ip 192.168.1.1
 
 # Calculer le hash d'un fichier
-python cli.py --hash /path/to/file.exe
+python cli.py --hash C:\path\to\file.exe
 
 # Output en JSON
 python cli.py --email mon_email.eml --json
 
 # Avec détails supplémentaires
 python cli.py --email mon_email.eml -v
-```
-
-### Option CLI Windows (raccourci prêt à l'emploi)
-
-```powershell
-# Depuis le dossier mail-security-tool
-.\venv\Scripts\Activate.ps1
-python cli.py --email .\examples\sample.eml --json
 ```
 
 ## 🔑 Obtenir les Clés API

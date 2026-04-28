@@ -41,30 +41,33 @@ mail-security-tool/
 ## 🚀 Installation
 
 ### Prérequis
+- Windows 10/11
 - Python 3.8+
 - pip
 
 ### Étapes
 
-1. **Cloner/télécharger le projet**
-   ```bash
+1. **Télécharger le projet**
+   ```powershell
    cd mail-security-tool
    ```
 
 2. **Créer un environnement virtuel**
-   ```bash
+   ```powershell
    python -m venv venv
-   source venv/Scripts/activate  # Windows
-   # ou
-   source venv/bin/activate      # Linux/Mac
    ```
 
-3. **Installer les dépendances**
-   ```bash
+3. **Activer l'environnement virtuel**
+   ```powershell
+   .\venv\Scripts\Activate.ps1
+   ```
+
+4. **Installer les dépendances**
+   ```powershell
    pip install -r requirements.txt
    ```
 
-4. **Configurer les clés API**
+5. **Configurer les clés API**
    - Éditer le fichier `.env`
    - Ajouter tes clés API VirusTotal, URLScan.io, AbuseIPDB, Scamdoc (RapidAPI)
 
@@ -74,13 +77,19 @@ mail-security-tool/
    - [AbuseIPDB](https://www.abuseipdb.com/)
    - [ScamPredictor (RapidAPI)](https://rapidapi.com/)
 
-5. **Lancer l'application**
-   ```bash
-   cd frontend
-   python app.py
+6. **Lancer l'application**
+
+   **Option A: Double-clic (le plus simple)**
+   ```
+   Double-cliquer sur run.bat
    ```
 
-6. **Accéder à l'interface**
+   **Option B: PowerShell**
+   ```powershell
+   python run.py
+   ```
+
+7. **Accéder à l'interface**
    - Ouvrir navigateur: `http://127.0.0.1:5000`
 
 ## 🐳 Pourquoi Docker ?
