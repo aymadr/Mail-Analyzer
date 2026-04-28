@@ -1,6 +1,6 @@
 # Mail Security Analyzer 🔒
 
-Outil d'analyse de sécurité email centralisé intégrant VirusTotal, URLScan.io, AbuseIPDB et Scamdoc (ScamPredictor via RapidAPI).
+Outil d'analyse de sécurité email centralisé intégrant VirusTotal, URLScan.io, AbuseIPDB, Scamdoc (ScamPredictor via RapidAPI) et Any.Run pour l'analyse dynamique optionnelle des pièces jointes.
 
 ## Aperçu
 
@@ -47,6 +47,7 @@ Outil d'analyse de sécurité email centralisé intégrant VirusTotal, URLScan.i
 - ✅ **Analyse d'URLs** : Vérification VirusTotal + URLScan.io + Scamdoc
 - ✅ **Analyse d'IPs** : VirusTotal + AbuseIPDB
 - ✅ **Scoring Scamdoc** : Trust Score et Risk Score pour domaines/URLs
+- ✅ **Analyse dynamique** : Any.Run optionnel pour les pièces jointes
 - ✅ **Base de données** : Cache local SQLite
 - ✅ **Interface web** : Dashboard moderne et intuitif
 
@@ -58,7 +59,7 @@ mail-security-tool/
 │   ├── config.py              # Configuration centralisée
 │   ├── email_parser.py        # Parser d'entête email
 │   ├── hash_calculator.py     # Calcul de hash
-│   ├── api_clients.py         # Clients API (VT, URLScan, AbuseIPDB, Scamdoc)
+│   ├── api_clients.py         # Clients API (VT, URLScan, AbuseIPDB, Scamdoc, Any.Run)
 │   ├── database.py            # Gestion SQLite
 │   └── analyzer.py            # Orchestrateur principal
 ├── frontend/
@@ -137,13 +138,14 @@ docker compose up --build -d
 
 5. **Configurer les clés API**
    - Éditer le fichier `.env`
-   - Ajouter tes clés API VirusTotal, URLScan.io, AbuseIPDB, Scamdoc (RapidAPI)
+   - Ajouter tes clés API VirusTotal, URLScan.io, AbuseIPDB, Scamdoc (RapidAPI) et Any.Run si tu actives l'analyse dynamique
 
    **Obtenir les clés API :**
    - [VirusTotal](https://www.virustotal.com/gui/home/upload)
    - [URLScan.io](https://urlscan.io/)
    - [AbuseIPDB](https://www.abuseipdb.com/)
    - [ScamPredictor (RapidAPI)](https://rapidapi.com/)
+   - [Any.Run](https://any.run/) si tu disposes d'un accès API
 
 6. **Lancer l'application**
    ```powershell
@@ -194,6 +196,7 @@ Note: ce n'est pas un traceroute réseau en direct. L'analyse est basée sur les
 - Charger le fichier suspect
 - Calcule: MD5, SHA1, SHA256
 - Vérifie les hash sur VirusTotal
+- Soumet optionnellement l'échantillon à Any.Run si activé dans `.env`
 - Affiche le verdict (Malveillant/Suspect/Propre)
 
 ### 3. Analyse d'URL
@@ -212,6 +215,16 @@ Note: ce n'est pas un traceroute réseau en direct. L'analyse est basée sur les
 ```python
 # backend/config.py
 API_TIMEOUT = 15  # secondes
+```
+
+### Activer Any.Run
+```env
+ANYRUN_ENABLED=true
+ANYRUN_API_KEY=your_api_key_here
+ANYRUN_BASE_URL=https://api.any.run
+ANYRUN_SUBMIT_PATH=/tasks/submit
+ANYRUN_REPORT_PATH=/tasks/{task_id}/report
+ANYRUN_MAX_FILESIZE_MB=20
 ```
 
 ### Changer le chemin de la BD
@@ -243,6 +256,8 @@ POST /api/analyze/attachment
 Body: multipart/form-data (file)
 ```
 
+Si Any.Run est activé, la réponse inclut aussi un bloc `anyrun` avec le résultat du job ou l'erreur éventuelle.
+
 ### URL
 ```
 POST /api/analyze/url
@@ -272,6 +287,7 @@ GET /api/report/<email_hash>
 - ✅ Limite de taille (50MB)
 - ✅ Validation des IPs/URLs
 - ✅ CORS à configurer si nécessaire
+- ✅ Any.Run désactivable par variable d'environnement
 
 ## 🐛 Troubleshooting
 
