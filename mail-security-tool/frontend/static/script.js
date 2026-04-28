@@ -9,7 +9,7 @@ const tabConfig = {
     attachment: { title: "Sandbox Pièce Jointe", desc: "Calcul de Hash (SHA256, MD5) & Vérification Virustotal" },
     url: { title: "Scanner d'URL", desc: "Vérification réputation VirusTotal, Scamdoc et empreinte URLScan" },
     ip: { title: "Threat Intel IP", desc: "Consultation croisée VirusTotal & AbuseIPDB" },
-    history: { title: "Historique & Logs", desc: "Archives des analyses enregistrées dans la DB locale" }
+    history: { title: "Historique des Analyses", desc: "Archives des analyses enregistrées dans la DB locale avec filtres" }
 };
 
 // Initialize app
@@ -917,41 +917,184 @@ function buildScamdocBox(result) {
 
 // Load Dashboard
 function loadDashboard() {
-    // Dashboard is static welcome screen, no API call needed
+    const dashboardSummary = document.getElementById('dashboardSummary');
+    if(!dashboardSummary) return;
+    
+    dashboardSummary.innerHTML = `
+        <div class="loader-container">
+            <div class="spinner"></div>
+            <p style="color: var(--primary); font-family: var(--font-mono); font-size: 0.9rem;">[ CHARGEMENT DES STATISTIQUES... ]</p>
+        </div>
+    `;
+    
+    fetch('/api/dashboard')
+        .then(res => res.json())
+        .then(data => {
+            const totals = data.totals || {emails: 0, attachments: 0, ips: 0, urls: 0};
+            const latestEmail = data.latest_email || {};
+            
+            let html = `
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:30px;">
+                    <div style="padding:20px; background:rgba(147, 112, 219, 0.1); border-radius:8px; border:1px solid rgba(147, 112, 219, 0.3); text-align:center;">
+                        <i class="fa-solid fa-envelope" style="font-size:2rem; color:#9370DB; margin-bottom:10px;"></i>
+                        <div style="font-size:2rem; font-weight:700; color:var(--text-primary);">${totals.emails}</div>
+                        <div style="font-size:0.85rem; color:var(--text-muted); margin-top:5px;">Emails Analysés</div>
+                    </div>
+                    
+                    <div style="padding:20px; background:rgba(52, 152, 219, 0.1); border-radius:8px; border:1px solid rgba(52, 152, 219, 0.3); text-align:center;">
+                        <i class="fa-solid fa-file" style="font-size:2rem; color:#3498DB; margin-bottom:10px;"></i>
+                        <div style="font-size:2rem; font-weight:700; color:var(--text-primary);">${totals.attachments}</div>
+                        <div style="font-size:0.85rem; color:var(--text-muted); margin-top:5px;">Fichiers Scannés</div>
+                    </div>
+                    
+                    <div style="padding:20px; background:rgba(46, 204, 113, 0.1); border-radius:8px; border:1px solid rgba(46, 204, 113, 0.3); text-align:center;">
+                        <i class="fa-solid fa-link" style="font-size:2rem; color:#2ECC71; margin-bottom:10px;"></i>
+                        <div style="font-size:2rem; font-weight:700; color:var(--text-primary);">${totals.urls}</div>
+                        <div style="font-size:0.85rem; color:var(--text-muted); margin-top:5px;">URLs Vérifiées</div>
+                    </div>
+                    
+                    <div style="padding:20px; background:rgba(230, 126, 34, 0.1); border-radius:8px; border:1px solid rgba(230, 126, 34, 0.3); text-align:center;">
+                        <i class="fa-solid fa-server" style="font-size:2rem; color:#E67E22; margin-bottom:10px;"></i>
+                        <div style="font-size:2rem; font-weight:700; color:var(--text-primary);">${totals.ips}</div>
+                        <div style="font-size:0.85rem; color:var(--text-muted); margin-top:5px;">IPs Analysées</div>
+                    </div>
+                </div>
+            `;
+            
+            // Latest Email Info
+            if(latestEmail.sender || latestEmail.subject) {
+                html += `
+                    <div style="padding:15px; background:rgba(255,255,255,0.05); border-radius:8px; border-left:4px solid var(--primary); margin-bottom:15px;">
+                        <p style="font-size:0.85rem; color:var(--text-muted); margin:0 0 5px 0;">📧 Dernier Email</p>
+                        <p style="font-size:0.9rem; color:var(--text-primary); margin:0 0 3px 0; word-break:break-all;"><strong>${latestEmail.sender || 'N/A'}</strong></p>
+                        <p style="font-size:0.85rem; color:var(--text-muted); margin:0; word-break:break-all;">${latestEmail.subject || 'N/A'}</p>
+                        <p style="font-size:0.8rem; color:var(--text-muted); margin:5px 0 0 0;">${latestEmail.date || 'N/A'}</p>
+                    </div>
+                `;
+            }
+            
+            dashboardSummary.innerHTML = html;
+        })
+        .catch(err => {
+            console.error('Dashboard load error:', err);
+            dashboardSummary.innerHTML = `
+                <div style="text-align:center; padding:40px; color:var(--danger);">
+                    <i class="fa-solid fa-triangle-exclamation" style="font-size:2rem; margin-bottom:10px;"></i>
+                    <p>Erreur lors du chargement du résumé</p>
+                </div>
+            `;
+        });
 }
 
 // Load History
 function loadHistory() {
-    const historyContainer = document.getElementById('dashboardSummary') || document.querySelector('.history-list');
-    if(!historyContainer) return;
+    const historyList = document.getElementById('historyList');
+    const filterValue = document.getElementById('historyFilter')?.value || '';
     
-    showLoader('dashboardSummary');
+    if(!historyList) return;
     
-    fetch('/api/history?limit=10')
+    historyList.innerHTML = `
+        <div class="loader-container">
+            <div class="spinner"></div>
+            <p style="color: var(--primary); font-family: var(--font-mono); font-size: 0.9rem;">[ CHARGEMENT DE L'HISTORIQUE... ]</p>
+        </div>
+    `;
+    
+    fetch('/api/history?limit=50')
         .then(res => res.json())
         .then(data => {
             if(!data || data.length === 0) {
-                historyContainer.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">Pas d\'analyses yet</div>';
+                historyList.innerHTML = `
+                    <div style="text-align:center; padding:40px; color:var(--text-muted);">
+                        <i class="fa-solid fa-inbox" style="font-size:2rem; margin-bottom:10px; opacity:0.5;"></i>
+                        <p>Aucune analyse enregistrée</p>
+                        <p style="font-size:0.9rem;">Vos analyses apparaîtront ici</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Filter by type if selected
+            let filtered = data;
+            if(filterValue) {
+                filtered = data.filter(item => {
+                    const itemType = (item.analysis_type || item.type || '').toLowerCase();
+                    // Check if attachment/file types match
+                    if(filterValue === 'attachment' && (itemType.includes('attachment') || itemType.includes('file'))) return true;
+                    return itemType.includes(filterValue.toLowerCase());
+                });
+            }
+            
+            if(filtered.length === 0) {
+                historyList.innerHTML = `
+                    <div style="text-align:center; padding:40px; color:var(--text-muted);">
+                        <p>Aucune analyse trouvée pour ce filtre</p>
+                    </div>
+                `;
                 return;
             }
             
             let html = '';
-            data.forEach(item => {
+            
+            filtered.forEach(item => {
+                const analysisType = (item.analysis_type || item.type || 'unknown').toLowerCase();
+                const target = item.target || item.title || item.email || item.ip || item.url || item.file_hash || 'N/A';
+                const detail = item.detail || item.subject || item.hash_type || '';
+                const verdict = item.verdict || (item.data && item.data.verdict) || 'N/A';
+                const timestamp = item.timestamp || item.date || 'N/A';
+                
+                let icon = 'circle';
+                let typeLabel = 'Analyse';
+                if(analysisType.includes('email')) {
+                    icon = 'envelope';
+                    typeLabel = '📧 Email';
+                } else if(analysisType.includes('attachment') || analysisType.includes('file')) {
+                    icon = 'file';
+                    typeLabel = '📁 Fichier';
+                } else if(analysisType.includes('url')) {
+                    icon = 'link';
+                    typeLabel = '🔗 URL';
+                } else if(analysisType.includes('ip')) {
+                    icon = 'server';
+                    typeLabel = '🖥️ IP';
+                }
+                
+                let badgeClass = 'badge-neutral';
+                if(verdict && verdict.toUpperCase() === 'MALICIOUS') badgeClass = 'badge-danger';
+                else if(verdict && verdict.toUpperCase() === 'SUSPICIOUS') badgeClass = 'badge-warning';
+                else if(verdict && verdict.toUpperCase() === 'CLEAN') badgeClass = 'badge-success';
+                
+                // Build display text
+                let displayText = target;
+                if(detail && detail !== 'URL' && detail !== 'IP' && detail !== 'Email') {
+                    displayText = `${target} (${detail})`;
+                }
+                
                 html += `
-                    <div class="history-item" style="padding:15px; border-bottom:1px solid rgba(255,255,255,0.1);">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <div>
-                                <strong>${item.analysis_type || 'Analyse'}</strong>
-                                <p style="font-size:0.85rem; color:var(--text-muted);">${item.timestamp || 'N/A'}</p>
+                    <div style="padding:15px; border-bottom:1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between; align-items:center;">
+                        <div style="flex:1;">
+                            <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                                <strong>${typeLabel}</strong>
                             </div>
-                            <span class="badge badge-neutral">${item.status || 'Complété'}</span>
+                            <p style="font-size:0.85rem; color:var(--text-muted); margin:0 0 5px 0; word-break:break-all; font-family:var(--font-mono);">${displayText}</p>
+                            <p style="font-size:0.8rem; color:var(--text-muted); margin:0; opacity:0.7;">${timestamp}</p>
                         </div>
+                        <span class="badge ${badgeClass}" style="white-space:nowrap; margin-left:15px; font-size:0.85rem;">
+                            ${verdict.toUpperCase()}
+                        </span>
                     </div>
                 `;
             });
-            historyContainer.innerHTML = html;
+            
+            historyList.innerHTML = html;
         })
         .catch(err => {
-            historyContainer.innerHTML = '<div style="color:var(--danger);">Erreur lors du chargement de l\'historique</div>';
+            console.error('History load error:', err);
+            historyList.innerHTML = `
+                <div style="text-align:center; padding:40px; color:var(--danger);">
+                    <i class="fa-solid fa-triangle-exclamation" style="font-size:2rem; margin-bottom:10px;"></i>
+                    <p>Erreur lors du chargement de l'historique</p>
+                </div>
+            `;
         });
 }

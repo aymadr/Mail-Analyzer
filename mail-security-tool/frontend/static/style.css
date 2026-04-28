@@ -894,6 +894,55 @@ body {
     border-color: var(--border-light);
 }
 
+/* Quick Access Buttons */
+.quick-access-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px 20px;
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.08) 0%, rgba(168, 85, 247, 0.05) 100%);
+    border: 1.5px solid var(--border-neon);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+.quick-access-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(0, 217, 255, 0.2), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.quick-access-btn:hover {
+    border-color: var(--primary);
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.15) 0%, rgba(168, 85, 247, 0.1) 100%);
+    color: var(--primary);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-neon);
+}
+
+.quick-access-btn i {
+    font-size: 1.8rem;
+    color: var(--primary);
+    filter: drop-shadow(0 0 8px var(--primary-glow));
+    transition: var(--transition-fast);
+}
+
+.quick-access-btn:hover i {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 12px var(--primary-glow-intense));
+}
+
 /* VT Stats */
 .vt-stats-row {
     display: flex;
