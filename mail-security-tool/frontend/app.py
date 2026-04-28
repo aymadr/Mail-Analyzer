@@ -56,9 +56,18 @@ def analyze_email():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
-        # Cleanup
+        # Cleanup - with retry for locked files
         if os.path.exists(filepath):
-            os.remove(filepath)
+            try:
+                os.remove(filepath)
+            except (PermissionError, OSError):
+                # Fichier verrouillé, essayer après un court délai
+                import time
+                time.sleep(0.1)
+                try:
+                    os.remove(filepath)
+                except Exception:
+                    pass  # Ignorer l'erreur si vraiment verrouillé
 
 @app.route('/api/analyze/attachment', methods=['POST'])
 def analyze_attachment():
@@ -81,7 +90,15 @@ def analyze_attachment():
         return jsonify({"error": str(e)}), 500
     finally:
         if os.path.exists(filepath):
-            os.remove(filepath)
+            try:
+                os.remove(filepath)
+            except (PermissionError, OSError):
+                import time
+                time.sleep(0.1)
+                try:
+                    os.remove(filepath)
+                except Exception:
+                    pass
 
 @app.route('/api/analyze/url', methods=['POST'])
 def analyze_url():
