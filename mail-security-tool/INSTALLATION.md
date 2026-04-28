@@ -1,73 +1,92 @@
-# Installation et Utilisation
+# Installation et Utilisation - Windows Only
 
 ## 🚀 Démarrage Rapide
 
-### Option 1: Interface Web (Recommandée)
+### ✅ Option 1: Interface Web (Recommandée)
 
-```bash
-# 1. Cloner/télécharger le projet
+**Méthode 1A - Double-cliquer sur `run.bat` (le plus simple)**
+
+```batch
+run.bat
+```
+
+→ L'application démarre automatiquement sur <http://127.0.0.1:5000>
+
+**Méthode 1B - Via PowerShell**
+
+```powershell
+# 1. Aller au dossier du projet
 cd mail-security-tool
 
-# 2. Créer environnement virtuel
-python -m venv venv
-# Windows PowerShell
+# 2. Activer l'environnement virtuel
 .\venv\Scripts\Activate.ps1
-# Windows CMD
-venv\Scripts\activate.bat
-# Linux/Mac
-source venv/bin/activate
 
-# 3. Installer les dépendances
+# 3. Installer les dépendances (première fois seulement)
 pip install -r requirements.txt
 
-# 4. Configurer les API keys dans .env
-nano .env  # éditer avec tes clés
+# 4. Configurer les clés API
+# Éditer le fichier .env avec tes clés VirusTotal, URLScan, AbuseIPDB, Scamdoc
 
 # 5. Lancer l'application
 python run.py
-# ou
-cd frontend && python app.py
-
-# 6. Ouvrir le navigateur
-# http://127.0.0.1:5000
 ```
 
-### Option 1 bis: Lancement avec Docker (clone puis run)
+**Méthode 1C - Via CMD (Invite de commande)**
 
-Oui, le flux est bien: **cloner le projet GitHub**, puis **lancer Docker**.
+```batch<>
+REM 1. Aller au dossier
+cd mail-security-tool
 
-```bash
-# 1. Cloner le repo
-git clone <URL_DU_REPO>
+REM 2. Activer l'environnement virtuel
+venv\Scripts\activate.bat
+
+REM 3. Installer les dépendances (première fois seulement)
+pip install -r requirements.txt
+
+REM 4. Éditer .env avec tes clés API
+
+REM 5. Lancer
+python run.py
+```
+
+→ L'application démarre sur <http://127.0.0.1:5000>
+
+### 🐳 Option 2: Docker
+
+**Prérequis:** Docker Desktop installé sur Windows
+
+```powershell
+# 1. Aller au dossier du projet
 cd mail-security-tool
 
 # 2. Préparer les variables d'environnement
-cp .env.example .env
-# puis éditer .env avec les clés API
+copy .env.example .env
+# Puis éditer .env avec tes clés API
 
 # 3. Construire et démarrer le conteneur
 docker compose up --build -d
 
-# 4. Ouvrir l'interface
-# http://127.0.0.1:5000
+# 4. Ouvrir http://127.0.0.1:5000
 ```
 
-Commandes utiles:
-```bash
+Commandes Docker utiles:
+
+```powershell
 # Voir les logs
 docker compose logs -f
 
 # Arrêter les services
 docker compose down
+
+# Afficher les conteneurs en cours
+docker ps
 ```
 
-### Option 2: Ligne de Commande (CLI)
+### 💻 Option 3: Ligne de Commande (CLI) - PAS ENCORE FINI
 
-```bash
-# Active d'abord l'environnement virtuel
-# Windows PowerShell: .\venv\Scripts\Activate.ps1
-# Windows CMD: venv\Scripts\activate.bat
-# Linux/Mac: source venv/bin/activate
+```powershell
+# Activer l'environnement virtuel
+.\venv\Scripts\Activate.ps1
 
 # Analyser un email
 python cli.py --email mon_email.eml
@@ -82,7 +101,7 @@ python cli.py --url https://suspicious.com
 python cli.py --ip 192.168.1.1
 
 # Calculer le hash d'un fichier
-python cli.py --hash /path/to/file.exe
+python cli.py --hash C:\path\to\file.exe
 
 # Output en JSON
 python cli.py --email mon_email.eml --json
@@ -91,18 +110,11 @@ python cli.py --email mon_email.eml --json
 python cli.py --email mon_email.eml -v
 ```
 
-### Option CLI Windows (raccourci prêt à l'emploi)
-
-```powershell
-# Depuis le dossier mail-security-tool
-.\venv\Scripts\Activate.ps1
-python cli.py --email .\examples\sample.eml --json
-```
-
 ## 🔑 Obtenir les Clés API
 
 ### 1. VirusTotal
-1. Aller sur https://www.virustotal.com
+
+1. Aller sur <https://www.virustotal.com>
 2. Créer un compte (gratuit)
 3. Aller dans "Settings" → "API key"
 4. Copier la clé API
@@ -112,13 +124,15 @@ VIRUSTOTAL_API_KEY=YOUR_API_KEY_HERE
 ```
 
 **Limites Gratuites:**
+
 - 4 requêtes par minute
 - Pas de priorité sur l'analyse
 
 ### 2. URLScan.io
-1. Aller sur https://urlscan.io
+
+1. Aller sur <https://urlscan.io>
 2. Créer un compte (gratuit)
-3. Accéder à https://urlscan.io/settings/
+3. Accéder à <https://urlscan.io/settings/>
 4. Copier l'API key
 
 ```env
@@ -126,11 +140,13 @@ URLSCAN_API_KEY=YOUR_API_KEY_HERE
 ```
 
 **Limites Gratuites:**
+
 - Scans limités par jour
 - Publicité sur rapports
 
 ### 3. AbuseIPDB
-1. Aller sur https://www.abuseipdb.com
+
+1. Aller sur <https://www.abuseipdb.com>
 2. Créer un compte (gratuit)
 3. Aller dans "Account" → "API"
 4. Copier l'API key
@@ -139,15 +155,24 @@ URLSCAN_API_KEY=YOUR_API_KEY_HERE
 ABUSEIPDB_API_KEY=YOUR_API_KEY_HERE
 ```
 
-**Limites Gratuites:**
-- 1000 requêtes par jour
-- Données limitées (5 rapports max)
+### 4. ScamDoc
+
+1. Aller sur <https://rapidapi.com/>
+2. Créer un compte (gratuit)
+3. Aller dans la barre de recherche, et chercher "ScamPredictor"
+4. Prendre la version basique (gratuite)
+5. Aller dans API Overview, et récupérer la "X-RapidAPI-Key"
+
+```env
+SCAMDOC_API_KEY=YOUR_API_KEY_HERE
+```
 
 ## 📊 Architecture Modulaire
 
 ### Backend Modules
 
 #### 1. `config.py`
+
 - Gestion des variables d'environnement
 - Paramètres API et timeouts
 
@@ -156,6 +181,7 @@ from backend.config import VIRUSTOTAL_API_KEY, API_TIMEOUT
 ```
 
 #### 2. `email_parser.py`
+
 - Parse des entêtes email
 - Extraction SPF, DKIM, DMARC
 - Extraction IPs et domaines
@@ -170,6 +196,7 @@ print(result['ips'])
 ```
 
 #### 3. `hash_calculator.py`
+
 - Calcul MD5, SHA1, SHA256
 - Calcul depuis fichier ou bytes
 
@@ -182,6 +209,7 @@ print(hashes['sha256'])
 ```
 
 #### 4. `api_clients.py`
+
 - Clients pour VirusTotal, URLScan.io, AbuseIPDB
 - Gestion des retries et erreurs
 
@@ -198,6 +226,7 @@ print(ip_result['abuse_confidence_score'])
 ```
 
 #### 5. `database.py`
+
 - Cache SQLite
 - Sauvegarde/récupération des analyses
 
@@ -210,6 +239,7 @@ result = db.get_file_hash_analysis("abc123")
 ```
 
 #### 6. `analyzer.py`
+
 - Orchestrateur principal
 - Coordonne toutes les analyses
 
@@ -229,6 +259,7 @@ url_analysis = analyzer.analyze_url("https://example.com")
 1. **Email** - Analyser un fichier email
    - Parse automatique SPF/DKIM/DMARC
    - Extraction et analyse des IPs
+   - Qui se coupe avec des vérifications sur VirusTotal et ScamDoc
 
 2. **Pièce Jointe** - Analyser les fichiers suspects
    - Calcul automatique des hash
@@ -236,10 +267,10 @@ url_analysis = analyzer.analyze_url("https://example.com")
 
 3. **URL** - Analyser les URLs suspectes
    - Scan URLScan.io
-   - Vérification VirusTotal
+   - Vérification VirusTotal et ScamDoc
 
 4. **IP** - Analyser les adresses IP
-   - VirusTotal check
+   - VirusTotal et ScamDoc check
    - AbuseIPDB reputation
 
 5. **Historique** - Voir les analyses précédentes
@@ -334,12 +365,14 @@ Email Reçu
 ## 🐛 Debugging
 
 ### Activer les logs verbeux
+
 ```python
 import logging
 logging.basicConfig(level=logging.DEBUG)
 ```
 
 ### Tester une API individuellement
+
 ```python
 from backend.api_clients import VirusTotalClient
 vt = VirusTotalClient()
@@ -347,6 +380,7 @@ print(vt.check_ip("8.8.8.8"))
 ```
 
 ### Vérifier la base de données
+
 ```python
 from backend.database import Database
 db = Database()
@@ -363,21 +397,3 @@ print(analyses)
 - [RFC 7208 - SPF](https://tools.ietf.org/html/rfc7208)
 - [RFC 6376 - DKIM](https://tools.ietf.org/html/rfc6376)
 - [RFC 7489 - DMARC](https://tools.ietf.org/html/rfc7489)
-
-## ❓ FAQ
-
-**Q: Comment ajouter un nouvel service d'analyse?**
-A: Créer une nouvelle classe dans `api_clients.py` et l'intégrer à `analyzer.py`
-
-**Q: Puis-je utiliser cela en production?**
-A: Oui, mais avec Gunicorn/uWSGI + Nginx, HTTPS, et base de données PostgreSQL
-
-**Q: Comment ajouter l'authentification?**
-A: Installer `Flask-Login` et ajouter des décorateurs `@login_required`
-
-**Q: Puis-je analyser les emails directement depuis ma boîte mail?**
-A: Oui, avec IMAP (voir futur module `email_client.py`)
-
----
-
-**Dernière mise à jour:** Avril 2026
