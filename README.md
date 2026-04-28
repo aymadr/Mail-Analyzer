@@ -76,13 +76,15 @@ mail-security-tool/
 
 ## 🚀 Démarrage Rapide - Deux Options
 
-### ✅ Option 1: Double-clic sur run.bat (Recommandé - Windows uniquement)
+Pour en savoir plus sur l'installation, notamment des clés API: ** Consulte le guide complet : [INSTALLATION.md](mail-security-tool/INSTALLATION.md)**
+
+### ✅ Option 1: Double-clic sur run.bat (Only Windows)
 
 ```
 Double-cliquer sur: run.bat
 ```
 
-C'est tout ! 🎉
+
 - Crée automatiquement l'environnement virtuel
 - Installe les dépendances
 - Démarre le serveur Flask
@@ -104,7 +106,7 @@ docker compose up --build -d
 
 ---
 
-## 🚀 Installation Détaillée (Si tu veux plus de contrôle)
+## 🚀 Installation Détaillée 
 
 ### Prérequis
 - Windows 10/11

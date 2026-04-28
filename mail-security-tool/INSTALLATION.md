@@ -77,7 +77,7 @@ docker compose down
 docker ps
 ```
 
-### 💻 Option 3: Ligne de Commande (CLI)
+### 💻 Option 3: Ligne de Commande (CLI) - PAS ENCORE FINI
 
 ```powershell
 # Activer l'environnement virtuel
@@ -243,6 +243,7 @@ url_analysis = analyzer.analyze_url("https://example.com")
 1. **Email** - Analyser un fichier email
    - Parse automatique SPF/DKIM/DMARC
    - Extraction et analyse des IPs
+   - Qui se coupe avec des vérifications sur VirusTotal et ScamDoc
 
 2. **Pièce Jointe** - Analyser les fichiers suspects
    - Calcul automatique des hash
@@ -250,10 +251,10 @@ url_analysis = analyzer.analyze_url("https://example.com")
 
 3. **URL** - Analyser les URLs suspectes
    - Scan URLScan.io
-   - Vérification VirusTotal
+   - Vérification VirusTotal et ScamDoc
 
 4. **IP** - Analyser les adresses IP
-   - VirusTotal check
+   - VirusTotal et ScamDoc check
    - AbuseIPDB reputation
 
 5. **Historique** - Voir les analyses précédentes
@@ -378,20 +379,3 @@ print(analyses)
 - [RFC 6376 - DKIM](https://tools.ietf.org/html/rfc6376)
 - [RFC 7489 - DMARC](https://tools.ietf.org/html/rfc7489)
 
-## ❓ FAQ
-
-**Q: Comment ajouter un nouvel service d'analyse?**
-A: Créer une nouvelle classe dans `api_clients.py` et l'intégrer à `analyzer.py`
-
-**Q: Puis-je utiliser cela en production?**
-A: Oui, mais avec Gunicorn/uWSGI + Nginx, HTTPS, et base de données PostgreSQL
-
-**Q: Comment ajouter l'authentification?**
-A: Installer `Flask-Login` et ajouter des décorateurs `@login_required`
-
-**Q: Puis-je analyser les emails directement depuis ma boîte mail?**
-A: Oui, avec IMAP (voir futur module `email_client.py`)
-
----
-
-**Dernière mise à jour:** Avril 2026
