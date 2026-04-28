@@ -38,14 +38,44 @@ mail-security-tool/
 └── README.md                  # Ce fichier
 ```
 
-## 🚀 Installation
+## 🚀 Démarrage Rapide - Deux Options
+
+### ✅ Option 1: Double-clic sur run.bat (Recommandé - Windows uniquement)
+
+```
+Double-cliquer sur: run.bat
+```
+
+C'est tout ! 🎉
+- Crée automatiquement l'environnement virtuel
+- Installe les dépendances
+- Démarre le serveur Flask
+- Accès: http://127.0.0.1:5000
+
+### ✅ Option 2: Docker (Windows/Mac/Linux)
+
+**Prérequis:** Docker Desktop installé
+
+```powershell
+# 1. Éditer .env avec tes clés API
+copy .env.example .env
+
+# 2. Démarrer
+docker compose up --build -d
+
+# 3. Ouvrir http://127.0.0.1:5000
+```
+
+---
+
+## 🚀 Installation Détaillée (Si tu veux plus de contrôle)
 
 ### Prérequis
 - Windows 10/11
 - Python 3.8+
 - pip
 
-### Étapes
+### Étapes Manuelles
 
 1. **Télécharger le projet**
    ```powershell
@@ -78,13 +108,6 @@ mail-security-tool/
    - [ScamPredictor (RapidAPI)](https://rapidapi.com/)
 
 6. **Lancer l'application**
-
-   **Option A: Double-clic (le plus simple)**
-   ```
-   Double-cliquer sur run.bat
-   ```
-
-   **Option B: PowerShell**
    ```powershell
    python run.py
    ```

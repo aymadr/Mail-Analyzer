@@ -145,9 +145,17 @@ URLSCAN_API_KEY=YOUR_API_KEY_HERE
 ABUSEIPDB_API_KEY=YOUR_API_KEY_HERE
 ```
 
-**Limites Gratuites:**
-- 1000 requêtes par jour
-- Données limitées (5 rapports max)
+### 4. ScamDoc
+1. Aller sur https://rapidapi.com/
+2. Créer un compte (gratuit)
+3. Aller dans la barre de recherche, et chercher "ScamPredictor"
+4. Prendre la version basique (gratuite)
+5. Aller dans API Overview, et récupérer la "X-RapidAPI-Key"
+
+```env
+SCAMDOC_API_KEY=YOUR_API_KEY_HERE
+```
+
 
 ## 📊 Architecture Modulaire
 

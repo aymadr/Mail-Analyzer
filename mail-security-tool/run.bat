@@ -10,18 +10,22 @@ echo  Mail Security Analyzer - Demarrage
 echo ========================================
 echo.
 
-REM Vérifier si Python est installé
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo ERREUR: Python n'est pas installe ou n'est pas dans PATH
-    echo.
-    echo Installez Python 3.8+ depuis: https://www.python.org/downloads/
-    pause
-    exit /b 1
-)
+REM Définir les chemins
+set "VENV_PYTHON=venv\Scripts\python.exe"
+set "VENV_PIP=venv\Scripts\pip.exe"
 
-REM Créer l'environnement virtuel s'il n'existe pas
+REM Vérifier si venv existe, sinon le créer
 if not exist "venv" (
+    echo Verification de Python...
+    python --version >nul 2>&1
+    if errorlevel 1 (
+        echo ERREUR: Python n'est pas installe ou n'est pas dans PATH
+        echo.
+        echo Installez Python 3.8+ depuis: https://www.python.org/downloads/
+        pause
+        exit /b 1
+    )
+    
     echo Création de l'environnement virtuel...
     python -m venv venv
     if errorlevel 1 (
@@ -31,16 +35,12 @@ if not exist "venv" (
     )
 )
 
-REM Activer l'environnement virtuel
-call venv\Scripts\activate.bat
-
 REM Installer les dépendances
 echo Verification des dependances...
-pip install -q -r requirements.txt
+"%VENV_PIP%" install -q -r requirements.txt 2>nul
 if errorlevel 1 (
-    echo ERREUR: Impossible d'installer les dépendances
-    pause
-    exit /b 1
+    echo ATTENTION: Impossible d'installer via pip, essai normal...
+    "%VENV_PIP%" install -r requirements.txt
 )
 
 echo.
@@ -50,7 +50,7 @@ echo ========================================
 echo.
 echo IMPORTANT: Avant de continuer, assurez-vous que:
 echo 1. Les cles API sont configurees dans '.env'
-echo 2. Les fichiers .env n'est pas vide
+echo 2. Le fichier .env n'est pas vide
 echo.
 
 REM Lancer Flask
@@ -63,7 +63,6 @@ echo.
 echo Appuyez sur Ctrl+C pour arreter
 echo.
 
-cd frontend
-python app.py
+"%VENV_PYTHON%" run.py
 
 pause

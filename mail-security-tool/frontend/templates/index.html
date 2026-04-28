@@ -24,11 +24,11 @@
             </div>
             
             <nav class="nav-menu">
-                <button class="nav-item" data-tab="dashboard">
+                <button class="nav-item active" data-tab="dashboard">
                     <i class="fa-solid fa-chart-line"></i>
                     <span>Dashboard</span>
                 </button>
-                <button class="nav-item active" data-tab="email">
+                <button class="nav-item" data-tab="email">
                     <i class="fa-solid fa-envelope-open-text"></i>
                     <span>Analyse Email</span>
                 </button>
@@ -76,18 +76,49 @@
             <div class="content-wrapper">
 
                 <!-- Tab: DASHBOARD -->
-                <section id="dashboard" class="view-panel hidden">
-                    <div class="card glass-card p-0">
-                        <div class="history-header">
-                            <h3><i class="fa-solid fa-chart-pie"></i> Rapport global</h3>
-                            <button class="btn btn-icon" onclick="loadDashboard()"><i class="fa-solid fa-rotate-right"></i></button>
+                <section id="dashboard" class="view-panel active fade-in">
+                    <div class="card glass-card" style="text-align:center; padding:60px 40px;">
+                        <div style="margin-bottom:30px;">
+                            <i class="fa-solid fa-shield-halved" style="font-size:4rem; color:var(--primary);"></i>
                         </div>
-                        <div id="dashboardSummary" class="history-list"></div>
+                        <h1 style="font-size:2.5rem; margin-bottom:15px; color:var(--text-primary);">Bienvenue dans SecAnalyze 🔒</h1>
+                        <p style="font-size:1.1rem; color:var(--text-muted); margin-bottom:30px; line-height:1.6;">
+                            Outil complet d'analyse de sécurité email intégrant VirusTotal, URLScan.io, AbuseIPDB et Scamdoc
+                        </p>
+                        
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:20px; margin-top:50px;">
+                            <div class="card glass-card" onclick="switchTab('email')" style="cursor:pointer; transition:all 0.3s;">
+                                <i class="fa-solid fa-envelope-open-text" style="font-size:2rem; color:var(--primary); margin-bottom:10px;"></i>
+                                <h3 style="margin:10px 0; color:var(--text-primary);">Analyser Email</h3>
+                                <p style="font-size:0.9rem; color:var(--text-muted);">Parse SPF, DKIM, DMARC</p>
+                            </div>
+                            <div class="card glass-card" onclick="switchTab('attachment')" style="cursor:pointer; transition:all 0.3s;">
+                                <i class="fa-solid fa-file-shield" style="font-size:2rem; color:var(--primary); margin-bottom:10px;"></i>
+                                <h3 style="margin:10px 0; color:var(--text-primary);">Pièce Jointe</h3>
+                                <p style="font-size:0.9rem; color:var(--text-muted);">Hash & Vérification VT</p>
+                            </div>
+                            <div class="card glass-card" onclick="switchTab('url')" style="cursor:pointer; transition:all 0.3s;">
+                                <i class="fa-solid fa-link" style="font-size:2rem; color:var(--primary); margin-bottom:10px;"></i>
+                                <h3 style="margin:10px 0; color:var(--text-primary);">Analyser URL</h3>
+                                <p style="font-size:0.9rem; color:var(--text-muted);">Vérification réputation</p>
+                            </div>
+                            <div class="card glass-card" onclick="switchTab('ip')" style="cursor:pointer; transition:all 0.3s;">
+                                <i class="fa-solid fa-server" style="font-size:2rem; color:var(--primary); margin-bottom:10px;"></i>
+                                <h3 style="margin:10px 0; color:var(--text-primary);">Analyser IP</h3>
+                                <p style="font-size:0.9rem; color:var(--text-muted);">Threat Intel</p>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top:50px; padding:20px; background:rgba(var(--primary-rgb), 0.1); border-radius:8px; border-left:4px solid var(--primary);">
+                            <p style="font-size:0.9rem; color:var(--text-muted);">
+                                💡 <strong>Astuce:</strong> Sélectionnez une option ci-dessus ou utilisez la barre latérale pour commencer une analyse
+                            </p>
+                        </div>
                     </div>
                 </section>
                 
                 <!-- Tab: EMAIL -->
-                <section id="email" class="view-panel active fade-in">
+                <section id="email" class="view-panel hidden">
                     <div class="card glass-card">
                         <form id="emailForm">
                             <div class="upload-zone" id="emailDropZone">

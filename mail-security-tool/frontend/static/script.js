@@ -4,7 +4,7 @@
 
 // Tab Configuration logic
 const tabConfig = {
-    dashboard: { title: "Dashboard Sécurité", desc: "Rapport synthétique des analyses et indicateurs clés" },
+    dashboard: { title: "Dashboard Sécurité", desc: "Bienvenue dans SecAnalyze - Choisissez une analyse pour commencer" },
     email: { title: "Inspecteur d'Email", desc: "Parse automatiquement les en-têtes SPF, DKIM, DMARC et analyse les IPs" },
     attachment: { title: "Sandbox Pièce Jointe", desc: "Calcul de Hash (SHA256, MD5) & Vérification Virustotal" },
     url: { title: "Scanner d'URL", desc: "Vérification réputation VirusTotal, Scamdoc et empreinte URLScan" },
@@ -17,7 +17,20 @@ document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     initDragAndDrop('emailDropZone', 'emailFile', 'emailFileName');
     initDragAndDrop('attachDropZone', 'attachmentFile', 'attachFileName');
+    
+    // Set initial header for dashboard
+    document.getElementById('active-tab-title').innerHTML = tabConfig.dashboard.title;
+    document.getElementById('active-tab-desc').innerHTML = tabConfig.dashboard.desc;
+    
+    // Load dashboard on startup
+    loadDashboard();
 });
+
+// Function to programmatically switch tabs
+function switchTab(tabName) {
+    const navItem = document.querySelector(`[data-tab="${tabName}"]`);
+    if(navItem) navItem.click();
+}
 
 // Navigation / Tabs
 function initTabs() {
@@ -900,4 +913,45 @@ function buildScamdocBox(result) {
             ${result.detail_url ? `<div style="margin-top:10px;"><a href="${result.detail_url}" target="_blank" class="text-primary">Voir détails</a></div>` : ''}
         </div>
     `;
+}
+
+// Load Dashboard
+function loadDashboard() {
+    // Dashboard is static welcome screen, no API call needed
+}
+
+// Load History
+function loadHistory() {
+    const historyContainer = document.getElementById('dashboardSummary') || document.querySelector('.history-list');
+    if(!historyContainer) return;
+    
+    showLoader('dashboardSummary');
+    
+    fetch('/api/history?limit=10')
+        .then(res => res.json())
+        .then(data => {
+            if(!data || data.length === 0) {
+                historyContainer.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">Pas d\'analyses yet</div>';
+                return;
+            }
+            
+            let html = '';
+            data.forEach(item => {
+                html += `
+                    <div class="history-item" style="padding:15px; border-bottom:1px solid rgba(255,255,255,0.1);">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <strong>${item.analysis_type || 'Analyse'}</strong>
+                                <p style="font-size:0.85rem; color:var(--text-muted);">${item.timestamp || 'N/A'}</p>
+                            </div>
+                            <span class="badge badge-neutral">${item.status || 'Complété'}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            historyContainer.innerHTML = html;
+        })
+        .catch(err => {
+            historyContainer.innerHTML = '<div style="color:var(--danger);">Erreur lors du chargement de l\'historique</div>';
+        });
 }
