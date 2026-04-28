@@ -332,16 +332,40 @@ class AnyRunClient(APIClient):
         self.timeout = ANYRUN_TIMEOUT
         self.max_filesize_mb = ANYRUN_MAX_FILESIZE_MB
 
-    def _auth_headers(self, content_type: Optional[str] = None) -> Dict:
+    def _auth_headers(self, content_type: Optional[str] = None, use_prefix: bool = True) -> Dict:
         headers = {}
         if self.api_key:
-            headers[self.auth_header] = f"{self.auth_prefix}{self.api_key}" if self.auth_prefix else self.api_key
+            token = f"{self.auth_prefix}{self.api_key}" if (use_prefix and self.auth_prefix) else self.api_key
+            headers[self.auth_header] = token
         if content_type:
             headers["Content-Type"] = content_type
         return headers
 
     def _build_url(self, path: str) -> str:
         return urljoin(f"{self.base_url}/", path.lstrip("/"))
+
+    def _anyrun_request(self, method: str, path: str, *, content_type: Optional[str] = None, fallback_raw_auth: bool = True, **kwargs) -> requests.Response:
+        url = self._build_url(path)
+        headers = kwargs.pop("headers", {}) or {}
+
+        response = requests.request(
+            method,
+            url,
+            headers={**headers, **self._auth_headers(content_type=content_type, use_prefix=True)},
+            timeout=self.timeout,
+            **kwargs,
+        )
+
+        if fallback_raw_auth and response.status_code in {401, 403} and self.auth_prefix:
+            response = requests.request(
+                method,
+                url,
+                headers={**headers, **self._auth_headers(content_type=content_type, use_prefix=False)},
+                timeout=self.timeout,
+                **kwargs,
+            )
+
+        return response
 
     def submit_file(self, file_path: str, metadata: Optional[Dict] = None) -> Dict:
         if not self.enabled:
@@ -362,14 +386,11 @@ class AnyRunClient(APIClient):
 
         try:
             with open(file_path, "rb") as file_obj:
-                files = {"file": file_obj}
-                data = metadata or {}
-                response = requests.post(
-                    self._build_url(self.submit_path),
-                    headers=self._auth_headers(),
-                    files=files,
-                    data=data,
-                    timeout=self.timeout,
+                response = self._anyrun_request(
+                    "post",
+                    self.submit_path,
+                    files={"file": file_obj},
+                    data=metadata or {},
                 )
             response.raise_for_status()
             response_data = response.json() if response.text else {}
@@ -388,17 +409,17 @@ class AnyRunClient(APIClient):
             payload.update(metadata)
 
         try:
-            response = requests.post(
-                self._build_url(self.submit_path),
-                headers=self._auth_headers("application/json"),
+            response = self._anyrun_request(
+                "post",
+                self.submit_path,
+                content_type="application/json",
                 json=payload,
-                timeout=self.timeout,
             )
             response.raise_for_status()
             response_data = response.json() if response.text else {}
             return self._normalize_submit_response(response_data)
         except Exception as e:
-            return {"error": str(e), "source": "AnyRun"}
+            return {"error": str(e), "source": "AnyRun", "hint": "Any.Run sandbox API access may require a paid plan or a different authorization format."}
 
     def get_report(self, task_id: str) -> Dict:
         if not self.enabled:
@@ -407,10 +428,9 @@ class AnyRunClient(APIClient):
             return {"error": "Any.Run API key not configured", "source": "AnyRun"}
 
         try:
-            response = requests.get(
-                self._build_url(self.report_path.format(task_id=task_id)),
-                headers=self._auth_headers(),
-                timeout=self.timeout,
+            response = self._anyrun_request(
+                "get",
+                self.report_path.format(task_id=task_id),
             )
             response.raise_for_status()
             return {"source": "AnyRun", "task_id": task_id, "report": response.json() if response.text else {}}
@@ -421,6 +441,8 @@ class AnyRunClient(APIClient):
     def _normalize_submit_response(data: Dict) -> Dict:
         task_id = data.get("task_id") or data.get("id") or data.get("uuid") or data.get("taskId")
         report_url = data.get("report_url") or data.get("reportUrl") or data.get("result_url") or data.get("url")
+        if not report_url and task_id:
+            report_url = f"https://app.any.run/tasks/{task_id}"
         status = data.get("status") or data.get("state") or ("QUEUED" if task_id else "OK")
 
         return {

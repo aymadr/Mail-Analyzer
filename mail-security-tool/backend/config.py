@@ -20,10 +20,10 @@ SCAMDOC_RAPIDAPI_HOST = os.getenv("SCAMDOC_RAPIDAPI_HOST", "scampredictor.p.rapi
 ANYRUN_ENABLED = os.getenv("ANYRUN_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
 ANYRUN_API_KEY = os.getenv("ANYRUN_API_KEY", "")
 ANYRUN_BASE_URL = os.getenv("ANYRUN_BASE_URL", "https://api.any.run")
-ANYRUN_SUBMIT_PATH = os.getenv("ANYRUN_SUBMIT_PATH", "/tasks/submit")
-ANYRUN_REPORT_PATH = os.getenv("ANYRUN_REPORT_PATH", "/tasks/{task_id}/report")
+ANYRUN_SUBMIT_PATH = os.getenv("ANYRUN_SUBMIT_PATH", "/v1/analysis/")
+ANYRUN_REPORT_PATH = os.getenv("ANYRUN_REPORT_PATH", "/report/{task_id}/ioc/json")
 ANYRUN_AUTH_HEADER = os.getenv("ANYRUN_AUTH_HEADER", "Authorization")
-ANYRUN_AUTH_PREFIX = os.getenv("ANYRUN_AUTH_PREFIX", "Bearer ")
+ANYRUN_AUTH_PREFIX = os.getenv("ANYRUN_AUTH_PREFIX", "API-Key ")
 ANYRUN_TIMEOUT = int(os.getenv("ANYRUN_TIMEOUT", "60"))
 ANYRUN_MAX_FILESIZE_MB = int(os.getenv("ANYRUN_MAX_FILESIZE_MB", "20"))
 
