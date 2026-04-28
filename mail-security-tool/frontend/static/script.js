@@ -986,10 +986,46 @@ function loadDashboard() {
         });
 }
 
+// Custom Dropdown Functions
+let currentHistoryFilter = '';
+
+function toggleHistoryFilter(e) {
+    e.preventDefault();
+    const menu = document.getElementById('historyFilterMenu');
+    menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+}
+
+function selectHistoryFilter(value) {
+    currentHistoryFilter = value;
+    const btn = document.querySelector('#historyFilterDropdown .dropdown-btn');
+    const menu = document.getElementById('historyFilterMenu');
+    
+    // Update button text
+    const items = {
+        '': 'Tous les types',
+        'email': '📧 Emails',
+        'attachment': '📁 Fichiers',
+        'url': '🔗 URLs',
+        'ip': '🖥️ IPs'
+    };
+    btn.innerHTML = `${items[value]} <i class="fa-solid fa-chevron-down"></i>`;
+    menu.style.display = 'none';
+    
+    loadHistory();
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('historyFilterDropdown');
+    if(dropdown && !dropdown.contains(e.target)) {
+        document.getElementById('historyFilterMenu').style.display = 'none';
+    }
+});
+
 // Load History
 function loadHistory() {
     const historyList = document.getElementById('historyList');
-    const filterValue = document.getElementById('historyFilter')?.value || '';
+    const filterValue = currentHistoryFilter;
     
     if(!historyList) return;
     
@@ -1064,22 +1100,37 @@ function loadHistory() {
                 else if(verdict && verdict.toUpperCase() === 'SUSPICIOUS') badgeClass = 'badge-warning';
                 else if(verdict && verdict.toUpperCase() === 'CLEAN') badgeClass = 'badge-success';
                 
-                // Build display text
+                // Build display text with better formatting for files
                 let displayText = target;
-                if(detail && detail !== 'URL' && detail !== 'IP' && detail !== 'Email') {
-                    displayText = `${target} (${detail})`;
+                let secondLine = '';
+                
+                if(analysisType.includes('attachment') || analysisType.includes('file')) {
+                    // For files: show truncated hash
+                    const maxHashLength = 20;
+                    let displayHash = target;
+                    if(target.length > maxHashLength) {
+                        displayHash = target.substring(0, 10) + '...' + target.substring(target.length - 10);
+                    }
+                    displayText = displayHash;
+                    if(detail) {
+                        secondLine = `<span style="font-size:0.75rem; color:var(--text-dimmed); text-transform:uppercase; letter-spacing:0.5px;">${detail}</span>`;
+                    }
+                } else if(detail && detail !== 'URL' && detail !== 'IP' && detail !== 'Email') {
+                    displayText = `${target}`;
+                    secondLine = `<span style="font-size:0.8rem; color:var(--text-muted); opacity:0.8;">${detail}</span>`;
                 }
                 
                 html += `
-                    <div style="padding:15px; border-bottom:1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between; align-items:center;">
-                        <div style="flex:1;">
-                            <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                    <div style="padding:15px; border-bottom:1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between; align-items:flex-start; gap:20px;">
+                        <div style="flex:1; min-width:0;">
+                            <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
                                 <strong>${typeLabel}</strong>
                             </div>
-                            <p style="font-size:0.85rem; color:var(--text-muted); margin:0 0 5px 0; word-break:break-all; font-family:var(--font-mono);">${displayText}</p>
+                            <p style="font-size:0.85rem; color:var(--primary); margin:0 0 4px 0; word-break:break-all; font-family:var(--font-mono); font-weight:500;">${displayText}</p>
+                            ${secondLine ? `<div style="margin-bottom:4px;">${secondLine}</div>` : ''}
                             <p style="font-size:0.8rem; color:var(--text-muted); margin:0; opacity:0.7;">${timestamp}</p>
                         </div>
-                        <span class="badge ${badgeClass}" style="white-space:nowrap; margin-left:15px; font-size:0.85rem;">
+                        <span class="badge ${badgeClass}" style="white-space:nowrap; flex-shrink:0; font-size:0.85rem;">
                             ${verdict.toUpperCase()}
                         </span>
                     </div>

@@ -215,14 +215,17 @@
                     <div class="card glass-card p-0">
                         <div class="history-header">
                             <h3><i class="fa-solid fa-clock-rotate-left"></i> Historique des Analyses</h3>
-                            <div style="display:flex; gap:10px;">
-                                <select id="historyFilter" onchange="loadHistory()" style="padding:8px 12px; background:rgba(255,255,255,0.05); color:var(--text-primary); border:1px solid rgba(255,255,255,0.2); border-radius:4px; cursor:pointer; font-size:0.9rem;">
-                                    <option value="">Tous les types</option>
-                                    <option value="email">📧 Emails</option>
-                                    <option value="attachment">📁 Fichiers</option>
-                                    <option value="url">🔗 URLs</option>
-                                    <option value="ip">🖥️ IPs</option>
-                                </select>
+                            <div style="display:flex; gap:10px; align-items:center;">
+                                <div class="custom-dropdown" id="historyFilterDropdown">
+                                    <button class="dropdown-btn" onclick="toggleHistoryFilter(event)">Tous les types <i class="fa-solid fa-chevron-down"></i></button>
+                                    <div class="dropdown-menu" id="historyFilterMenu">
+                                        <div class="dropdown-item" data-value="" onclick="selectHistoryFilter('')">Tous les types</div>
+                                        <div class="dropdown-item" data-value="email" onclick="selectHistoryFilter('email')"><span style="font-size:1.1rem; margin-right:8px;"></span> Emails</div>
+                                        <div class="dropdown-item" data-value="attachment" onclick="selectHistoryFilter('attachment')"><span style="font-size:1.1rem; margin-right:8px;"></span> Fichiers</div>
+                                        <div class="dropdown-item" data-value="url" onclick="selectHistoryFilter('url')"><span style="font-size:1.1rem; margin-right:8px;"></span> URLs</div>
+                                        <div class="dropdown-item" data-value="ip" onclick="selectHistoryFilter('ip')"><span style="font-size:1.1rem; margin-right:8px;"></span> IPs</div>
+                                    </div>
+                                </div>
                                 <button class="btn btn-icon" onclick="loadHistory()"><i class="fa-solid fa-rotate-right"></i></button>
                             </div>
                         </div>
