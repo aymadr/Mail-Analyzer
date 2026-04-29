@@ -6,6 +6,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def to_bool(value: str) -> bool:
+    """Convert environment string to boolean."""
+    return value.lower() in {"1", "true", "yes", "on"}
+
 # API Keys - À remplir dans le fichier .env
 VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY", "")
 URLSCAN_API_KEY = os.getenv("URLSCAN_API_KEY", "")
@@ -16,17 +20,13 @@ SCAMDOC_URL_PATH = os.getenv("SCAMDOC_URL_PATH", "/domain/{domain_name}")
 SCAMDOC_EMAIL_PATH = os.getenv("SCAMDOC_EMAIL_PATH", "/email/{email}")
 SCAMDOC_RAPIDAPI_HOST = os.getenv("SCAMDOC_RAPIDAPI_HOST", "scampredictor.p.rapidapi.com")
 
-# DISABLED: Any.Run API requires paid plan
-# Any.Run sandbox integration (optional)
-# ANYRUN_ENABLED = os.getenv("ANYRUN_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
-# ANYRUN_API_KEY = os.getenv("ANYRUN_API_KEY", "")
-# ANYRUN_BASE_URL = os.getenv("ANYRUN_BASE_URL", "https://api.any.run")
-# ANYRUN_SUBMIT_PATH = os.getenv("ANYRUN_SUBMIT_PATH", "/v1/analysis/")
-# ANYRUN_REPORT_PATH = os.getenv("ANYRUN_REPORT_PATH", "/report/{task_id}/ioc/json")
-# ANYRUN_AUTH_HEADER = os.getenv("ANYRUN_AUTH_HEADER", "Authorization")
-# ANYRUN_AUTH_PREFIX = os.getenv("ANYRUN_AUTH_PREFIX", "API-Key ")
-# ANYRUN_TIMEOUT = int(os.getenv("ANYRUN_TIMEOUT", "60"))
-# ANYRUN_MAX_FILESIZE_MB = int(os.getenv("ANYRUN_MAX_FILESIZE_MB", "20"))
+# Hybrid Analysis sandbox integration
+HYBRID_ANALYSIS_ENABLED = to_bool(os.getenv("HYBRID_ANALYSIS_ENABLED", "true"))
+HYBRID_ANALYSIS_API_KEY = os.getenv("HYBRID_ANALYSIS_API_KEY", "")
+HYBRID_ANALYSIS_BASE_URL = os.getenv("HYBRID_ANALYSIS_BASE_URL", "https://hybrid-analysis.com/api/v2")
+HYBRID_ANALYSIS_USER_AGENT = os.getenv("HYBRID_ANALYSIS_USER_AGENT", "Falcon")
+HYBRID_ANALYSIS_TIMEOUT = int(os.getenv("HYBRID_ANALYSIS_TIMEOUT", "60"))
+HYBRID_ANALYSIS_MAX_FILESIZE_MB = int(os.getenv("HYBRID_ANALYSIS_MAX_FILESIZE_MB", "30"))
 
 # Configuration Base de Données
 DB_PATH = os.getenv("DB_PATH", "data/results.db")

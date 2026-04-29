@@ -217,17 +217,16 @@ Note: ce n'est pas un traceroute réseau en direct. L'analyse est basée sur les
 API_TIMEOUT = 15  # secondes
 ```
 
-### Activer Any.Run (DISABLED: requires paid plan)
-<!-- Any.Run API integration is disabled as it requires a paid subscription.
+### Activer Hybrid Analysis (Sandbox gratuit)
 ```env
-ANYRUN_ENABLED=true
-ANYRUN_API_KEY=your_api_key_here
-ANYRUN_BASE_URL=https://api.any.run
-ANYRUN_SUBMIT_PATH=/tasks/submit
-ANYRUN_REPORT_PATH=/tasks/{task_id}/report
-ANYRUN_MAX_FILESIZE_MB=20
+HYBRID_ANALYSIS_ENABLED=true
+HYBRID_ANALYSIS_API_KEY=your_api_key_from_hybrid_analysis
+HYBRID_ANALYSIS_BASE_URL=https://www.hybrid-analysis.com/api/v2
+HYBRID_ANALYSIS_USER_AGENT=secanalyze-tool-1.0
+HYBRID_ANALYSIS_MAX_FILESIZE_MB=30
 ```
--->
+
+> Obtenez une clé API gratuite sur: https://hybrid-analysis.com/
 
 ### Changer le chemin de la BD
 ```python
@@ -258,9 +257,7 @@ POST /api/analyze/attachment
 Body: multipart/form-data (file)
 ```
 
-<!-- DISABLED: Any.Run API requires paid plan
-Si Any.Run est activé, la réponse inclut aussi un bloc `anyrun` avec le résultat du job ou l'erreur éventuelle.
--->
+Si Hybrid Analysis est activé, la réponse inclut aussi un bloc `hybrid_analysis` avec le résultat du job ou l'erreur éventuelle.
 
 ### URL
 ```

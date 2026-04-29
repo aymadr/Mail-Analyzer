@@ -6,10 +6,10 @@ import ipaddress
 import re
 import requests
 from urllib.parse import urlparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from email_parser import EmailHeaderParser
 from hash_calculator import HashCalculator
-from api_clients import VirusTotalClient, URLScanIOClient, AbuseIPDBClient, ScamdocClient
-# from api_clients import AnyRunClient  # DISABLED: Any.Run API requires paid plan
+from api_clients import VirusTotalClient, URLScanIOClient, AbuseIPDBClient, ScamdocClient, HybridAnalysisClient
 from database import Database
 from typing import Dict, List
 
@@ -24,7 +24,7 @@ class SecurityAnalyzer:
         self.urlscan_client = URLScanIOClient()
         self.abuseipdb_client = AbuseIPDBClient()
         self.scamdoc_client = ScamdocClient()
-        # self.anyrun_client = AnyRunClient()  # DISABLED: Any.Run API requires paid plan
+        self.hybrid_analysis_client = HybridAnalysisClient()
         self.db = Database()
     
     def analyze_email_file(self, file_path: str) -> Dict:
@@ -99,40 +99,70 @@ class SecurityAnalyzer:
         
         results = {
             "file": hashes,
-            "virustotal": {},
-            "urlscan": {},
-            "analysis": {}
+            "virustotal": {}
         }
         
-        # Analyse VirusTotal par hash (lookup dans la base VirusTotal, sans upload)
-        for hash_type in ['md5', 'sha1', 'sha256']:
-            vt_result = self.vt_client.check_file_hash(hashes[hash_type])
-            results["virustotal"][hash_type] = vt_result
-            self.db.save_file_hash_analysis(hashes[hash_type], hash_type, vt_result)
-
-        # DISABLED: Any.Run API requires paid plan
-        # if self.anyrun_client.enabled:
-        #     anyrun_result = self.anyrun_client.submit_file(file_path, metadata={"file_hash": hashes.get("sha256", "")})
-        #     results["anyrun"] = anyrun_result
-        #     if hashes.get("sha256"):
-        #         self.db.save_file_hash_analysis(hashes["sha256"], "anyrun", anyrun_result)
+        # Utilise ThreadPoolExecutor pour appeler les APIs en parallèle
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {}
+            
+            # Submit VirusTotal hash checks (MD5, SHA1, SHA256)
+            for hash_type in ['md5', 'sha1', 'sha256']:
+                futures[f'vt_{hash_type}'] = executor.submit(
+                    self.vt_client.check_file_hash, hashes[hash_type]
+                )
+            
+            # Submit Hybrid Analysis (if enabled)
+            if self.hybrid_analysis_client.enabled:
+                futures['hybrid_analysis'] = executor.submit(
+                    self.hybrid_analysis_client.submit_file, file_path
+                )
+            
+            # Attendre que tous les résultats reviennent
+            for key, future in futures.items():
+                try:
+                    result = future.result(timeout=30)
+                    if key.startswith('vt_'):
+                        hash_type = key.split('_')[1]
+                        results["virustotal"][hash_type] = result
+                        self.db.save_file_hash_analysis(hashes[hash_type], hash_type, result)
+                    else:
+                        results[key] = result
+                        if key == 'hybrid_analysis' and hashes.get("sha256"):
+                            self.db.save_file_hash_analysis(hashes["sha256"], "hybrid_analysis", result)
+                except Exception as e:
+                    results[key] = {"error": str(e)}
         
         return results
     
     def analyze_url(self, url: str) -> Dict:
         """Analyse complète d'une URL"""
         normalized_url = self._normalize_url(url)
-        results = {
-            "url": normalized_url,
-            "virustotal": self.vt_client.check_url(normalized_url),
-            "urlscan": self.urlscan_client.scan_url(normalized_url),
-            "scamdoc": self.scamdoc_client.check_url(normalized_url)
-        }
-
-        # DISABLED: Any.Run API requires paid plan
-        # if self.anyrun_client.enabled:
-        #     results["anyrun"] = self.anyrun_client.submit_url(normalized_url)
+        results = {"url": normalized_url}
         
+        # Utilise ThreadPoolExecutor pour appeler les APIs en parallèle
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {
+                'virustotal': executor.submit(self.vt_client.check_url, normalized_url),
+                'urlscan': executor.submit(self.urlscan_client.scan_url, normalized_url),
+                'scamdoc': executor.submit(self.scamdoc_client.check_url, normalized_url)
+            }
+            
+            # Submit Hybrid Analysis (if enabled)
+            if self.hybrid_analysis_client.enabled:
+                futures['hybrid_analysis'] = executor.submit(
+                    self.hybrid_analysis_client.submit_url, normalized_url
+                )
+            
+            # Attendre que tous les résultats reviennent
+            for api_name, future in futures.items():
+                try:
+                    result = future.result(timeout=30)
+                    results[api_name] = result
+                except Exception as e:
+                    results[api_name] = {"error": str(e)}
+        
+        # Sauvegarde en BD
         self.db.save_url_analysis(normalized_url, results)
         return results
 

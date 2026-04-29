@@ -4,17 +4,18 @@ Clients API pour VirusTotal, URLScan.io, AbuseIPDB
 import requests
 import time
 import base64
+import logging
 from pathlib import Path
 from urllib.parse import urljoin
 from urllib.parse import urlparse
 from typing import Dict, Optional
+
+logger = logging.getLogger(__name__)
 from config import (
     VIRUSTOTAL_API_KEY, URLSCAN_API_KEY, ABUSEIPDB_API_KEY,
     SCAMDOC_API_KEY, SCAMDOC_BASE_URL, SCAMDOC_URL_PATH, SCAMDOC_EMAIL_PATH, SCAMDOC_RAPIDAPI_HOST, SCAMDOC_TIMEOUT,
     API_TIMEOUT, MAX_RETRIES,
-    # DISABLED: Any.Run API requires paid plan
-    # ANYRUN_ENABLED, ANYRUN_API_KEY, ANYRUN_BASE_URL, ANYRUN_SUBMIT_PATH, ANYRUN_REPORT_PATH,
-    # ANYRUN_AUTH_HEADER, ANYRUN_AUTH_PREFIX, ANYRUN_TIMEOUT, ANYRUN_MAX_FILESIZE_MB
+    HYBRID_ANALYSIS_ENABLED, HYBRID_ANALYSIS_API_KEY, HYBRID_ANALYSIS_BASE_URL, HYBRID_ANALYSIS_USER_AGENT, HYBRID_ANALYSIS_TIMEOUT, HYBRID_ANALYSIS_MAX_FILESIZE_MB
 )
 
 class APIClient:
@@ -315,9 +316,217 @@ class AbuseIPDBClient(APIClient):
             return {"error": str(e), "source": "AbuseIPDB"}
 
 
-# DISABLED: Any.Run API requires paid plan
-# The AnyRunClient class has been disabled as Any.Run sandbox API requires a paid subscription.
-# See config.py for commented-out ANYRUN_* variables if you need to re-enable later.
+class HybridAnalysisClient(APIClient):
+    """Client Hybrid Analysis (Falcon Sandbox) pour quick-scan d'URLs et fichiers.
+    
+    API v2: https://hybrid-analysis.com/api/v2
+    Endpoints: /quick-scan/file, /quick-scan/url, /overview/{sha256}
+    """
+
+    def __init__(self):
+        self.enabled = HYBRID_ANALYSIS_ENABLED
+        self.api_key = HYBRID_ANALYSIS_API_KEY
+        self.base_url = HYBRID_ANALYSIS_BASE_URL.rstrip("/")
+        self.user_agent = HYBRID_ANALYSIS_USER_AGENT
+        self.timeout = HYBRID_ANALYSIS_TIMEOUT
+        self.max_filesize_mb = HYBRID_ANALYSIS_MAX_FILESIZE_MB
+
+    def _headers(self) -> Dict:
+        """Build request headers with API key and user agent."""
+        headers = {
+            "User-Agent": "Falcon",
+            "api-key": self.api_key,
+        }
+        return headers
+
+    def submit_file(self, file_path: str, metadata: Optional[Dict] = None) -> Dict:
+        """Submit file to Hybrid Analysis quick-scan."""
+        if not self.enabled:
+            return {"source": "HybridAnalysis", "status": "DISABLED"}
+        if not self.api_key:
+            return {"error": "Hybrid Analysis API key not configured", "source": "HybridAnalysis"}
+
+        try:
+            file_size_mb = Path(file_path).stat().st_size / (1024 * 1024)
+            if file_size_mb > self.max_filesize_mb:
+                return {
+                    "source": "HybridAnalysis",
+                    "status": "SKIPPED",
+                    "error": f"File > {self.max_filesize_mb}MB",
+                }
+        except Exception:
+            pass
+
+        try:
+            with open(file_path, "rb") as f:
+                files = {"file": (Path(file_path).name, f, "application/octet-stream")}
+                data = {
+                    "scan_type": "all"
+                }
+                
+                response = requests.post(
+                    f"{self.base_url}/quick-scan/file",
+                    headers=self._headers(),
+                    files=files,
+                    data=data,
+                    timeout=self.timeout,
+                )
+            
+            if response.status_code >= 400:
+                return {"error": f"{response.status_code}: {response.text}", "source": "HybridAnalysis"}
+            
+            result = response.json()
+            logger.info(f"[HybridAnalysis] submit_file response keys: {result.keys()}")
+            logger.info(f"[HybridAnalysis] Full response: {result}")
+            return {
+                "source": "HybridAnalysis",
+                "status": "SUBMITTED",
+                "job_id": result.get("job_id"),
+                "sha256": result.get("sha256"),
+                "report_url": f"https://hybrid-analysis.com/sample/{result.get('sha256')}",
+            }
+        except Exception as e:
+            return {"error": str(e), "source": "HybridAnalysis"}
+
+    def submit_url(self, url: str, metadata: Optional[Dict] = None) -> Dict:
+        """Submit URL to Hybrid Analysis quick-scan."""
+        if not self.enabled:
+            return {"source": "HybridAnalysis", "status": "DISABLED"}
+        if not self.api_key:
+            return {"error": "Hybrid Analysis API key not configured", "source": "HybridAnalysis"}
+
+        try:
+            data = {
+                "url": url,
+                "scan_type": "all"
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/quick-scan/url",
+                headers=self._headers(),
+                data=data,
+                timeout=self.timeout,
+            )
+            
+            if response.status_code >= 400:
+                return {"error": f"{response.status_code}: {response.text}", "source": "HybridAnalysis"}
+            
+            result = response.json()
+            logger.info(f"[HybridAnalysis] submit_url response keys: {result.keys()}")
+            logger.info(f"[HybridAnalysis] Full response: {result}")
+            return {
+                "source": "HybridAnalysis",
+                "status": "SUBMITTED",
+                "job_id": result.get("job_id"),
+                "url": url,
+                "report_url": f"https://hybrid-analysis.com/submission/{result.get('job_id')}",
+            }
+        except Exception as e:
+            return {"error": str(e), "source": "HybridAnalysis"}
+
+    def get_report(self, sha256: str) -> Dict:
+        """Get overview/report for a file by SHA256."""
+        if not self.enabled:
+            return {"source": "HybridAnalysis", "status": "DISABLED"}
+        if not self.api_key:
+            return {"error": "Hybrid Analysis API key not configured", "source": "HybridAnalysis"}
+
+        try:
+            response = requests.get(
+                f"{self.base_url}/overview/{sha256}",
+                headers=self._headers(),
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            result = response.json()
+            
+            verdict = result.get("verdict", "unknown")
+            threat_level = result.get("threat_level", 0)
+            
+            return {
+                "source": "HybridAnalysis",
+                "sha256": sha256,
+                "verdict": verdict,
+                "threat_level": threat_level,
+                "summary": result.get("summary", ""),
+                "report_url": f"https://hybrid-analysis.com/sample/{sha256}",
+            }
+        except Exception as e:
+            return {"error": str(e), "source": "HybridAnalysis"}
+
+    def get_quick_scan_result(self, job_id: str) -> Dict:
+        """Get quick-scan result by job ID."""
+        if not self.enabled:
+            return {"source": "HybridAnalysis", "status": "DISABLED"}
+        if not self.api_key:
+            return {"error": "Hybrid Analysis API key not configured", "source": "HybridAnalysis"}
+
+        try:
+            response = requests.get(
+                f"{self.base_url}/quick-scan/{job_id}",
+                headers=self._headers(),
+                timeout=self.timeout,
+            )
+            
+            if response.status_code >= 400:
+                return {"error": f"{response.status_code}: {response.text}", "source": "HybridAnalysis"}
+            
+            result = response.json()
+            
+            return {
+                "source": "HybridAnalysis",
+                "job_id": job_id,
+                "state": result.get("state"),
+                "verdict": result.get("verdict", "unknown"),
+                "threat_level": result.get("threat_level", 0),
+                "type": result.get("type"),
+                "sha256": result.get("sha256"),
+                "report_url": f"https://hybrid-analysis.com/sample/{result.get('sha256')}" if result.get("sha256") else f"https://hybrid-analysis.com/sample/{job_id}",
+                "full_report": result
+            }
+        except Exception as e:
+            return {"error": str(e), "source": "HybridAnalysis"}
+
+    def submit_and_wait(self, file_path: str = None, url: str = None, timeout: int = 120) -> Dict:
+        """Submit file/URL and poll until result is ready."""
+        if file_path:
+            submit_result = self.submit_file(file_path)
+        elif url:
+            submit_result = self.submit_url(url)
+        else:
+            return {"error": "Either file_path or url required", "source": "HybridAnalysis"}
+        
+        if submit_result.get("error"):
+            return submit_result
+        
+        job_id = submit_result.get("job_id")
+        if not job_id:
+            return {"error": "No job_id returned from submission", "source": "HybridAnalysis"}
+        
+        # Poll for result
+        import time
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            result = self.get_quick_scan_result(job_id)
+            
+            if result.get("error"):
+                return result
+            
+            # Check if analysis is complete
+            state = result.get("state", "")
+            if state not in ["running", "pending"]:
+                return result
+            
+            time.sleep(2)  # Wait 2 seconds before retrying
+        
+        # Timeout reached
+        return {
+            "source": "HybridAnalysis",
+            "job_id": job_id,
+            "state": "timeout",
+            "verdict": "unknown",
+            "error": f"Analysis did not complete within {timeout} seconds"
+        }
 
 
 class ScamdocClient(APIClient):

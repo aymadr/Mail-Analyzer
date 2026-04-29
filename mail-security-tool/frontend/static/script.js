@@ -6,7 +6,7 @@
 const tabConfig = {
     dashboard: { title: "Dashboard Sécurité", desc: "Bienvenue dans SecAnalyze - Choisissez une analyse pour commencer" },
     email: { title: "Inspecteur d'Email", desc: "Parse automatiquement les en-têtes SPF, DKIM, DMARC et analyse les IPs" },
-    attachment: { title: "Sandbox Pièce Jointe", desc: "Calcul de Hash (SHA256, MD5) & Vérification Virustotal" },
+    attachment: { title: "Sandbox Pièce Jointe", desc: "Calcul de Hash (SHA256, MD5) & Vérification Virustotal + Hybrid Analysis" },
     url: { title: "Scanner d'URL", desc: "Vérification réputation VirusTotal, Scamdoc et empreinte URLScan" },
     ip: { title: "Threat Intel IP", desc: "Consultation croisée VirusTotal & AbuseIPDB" },
     text: { title: "Analyse de Texte", desc: "Détecte les patterns de phishing: formules, fautes, URLs suspectes" },
@@ -600,8 +600,7 @@ function renderAttachmentResult(data) {
     const el = document.getElementById('attachmentResult');
     const f = data.file || {};
     const vt = data.virustotal || {};
-    // DISABLED: Any.Run API requires paid plan
-    // const anyrun = data.anyrun || {};
+    const ha = data.hybrid_analysis || {};
     
     let html = `
         <div class="result-card">
@@ -676,18 +675,28 @@ function renderAttachmentResult(data) {
     //     const anyrunStatus = (anyrun.status || (anyrun.error ? 'ERROR' : 'UNKNOWN')).toUpperCase();
     //     html += `<div class="result-card">
     //         <div class="result-header"><i class="fa-solid fa-flask-vial"></i> Any.Run</div>
-    //         <div class="result-body">
-    //             <div class="stat-item">
-    //                 <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
-    //                     <span class="badge ${anyrun.error ? 'badge-suspicious' : 'badge-neutral'}">${anyrunStatus}</span>
-    //                     ${anyrun.task_id ? `<span class="text-muted text-sm mono">Task: ${anyrun.task_id}</span>` : ''}
-    //                 </div>
-    //                 ${anyrun.error ? `<div class="api-error-box">${anyrun.error}</div>` : ''}
-    //                 ${anyrun.report_url ? `<div style="margin-top:10px;"><a href="${anyrun.report_url}" target="_blank" class="btn btn-primary" style="display:inline-block;"><i class="fa-solid fa-up-right-from-square"></i> Ouvrir le rapport</a></div>` : ''}
-    //             </div>
-    //         </div>
-    //     </div>`;
+    // ...
     // }
+
+    if (data.hybrid_analysis) {
+        const ha = data.hybrid_analysis || {};
+        const haStatus = (ha.state || ha.verdict || (ha.error ? 'ERROR' : 'UNKNOWN')).toUpperCase();
+        html += `<div class="result-card">
+            <div class="result-header"><i class="fa-solid fa-flask-vial"></i> Hybrid Analysis Sandbox</div>
+            <div class="result-body">
+                <div class="stat-item">
+                    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+                        <span class="badge ${ha.error ? 'badge-suspicious' : (ha.verdict ? 'badge-' + ha.verdict.toLowerCase() : 'badge-neutral')}">${haStatus}</span>
+                        ${ha.sha256 ? `<span class="text-muted text-sm mono" style="word-break:break-all;">${ha.sha256.substring(0, 16)}...</span>` : ''}
+                    </div>
+                    ${ha.error ? `<div class="api-error-box">${ha.error}</div>` : ''}
+                    ${ha.verdict ? `<div style="margin-top:8px;"><strong>Verdict:</strong> ${ha.verdict}</div>` : ''}
+                    ${ha.threat_level !== undefined ? `<div style="margin-top:8px;"><strong>Niveau de menace:</strong> ${ha.threat_level}</div>` : ''}
+                    ${ha.report_url ? `<div style="margin-top:10px;"><a href="${ha.report_url}" target="_blank" class="btn btn-primary" style="display:inline-block;"><i class="fa-solid fa-up-right-from-square"></i> Voir le rapport</a></div>` : ''}
+                </div>
+            </div>
+        </div>`;
+    }
 
     el.innerHTML = html;
     showToast('success', 'Sandbox OK', 'Hashs calculés et analysés.');
@@ -697,6 +706,7 @@ function renderUrlResult(data) {
     const el = document.getElementById('urlResult');
     // DISABLED: Any.Run API requires paid plan
     // const anyrun = data.anyrun || {};
+    const ha = data.hybrid_analysis || {};
     
     let html = `
         <div class="result-card">
@@ -764,16 +774,25 @@ function renderUrlResult(data) {
     //     if(anyrun.error) {
     //         html += `<div class="api-error-box">${anyrun.error}</div>`;
     //     } else {
-    //         html += `
-    //             <div style="margin-top:15px; text-align:center;">
-    //                 <span class="badge badge-neutral">${(anyrun.status || 'UNKNOWN').toUpperCase()}</span>
-    //                 ${anyrun.task_id ? `<p class="text-sm text-muted" style="margin-top:10px;">Task: <span class="mono">${anyrun.task_id}</span></p>` : ''}
-    //                 ${anyrun.report_url ? `<p style="margin-top:12px;"><a href="${anyrun.report_url}" target="_blank" class="btn btn-primary" style="display:inline-block;"><i class="fa-solid fa-up-right-from-square"></i> Voir le rapport Any.Run</a></p>` : ''}
-    //             </div>
-    //         `;
+    //         html += ` ... `;
     //     }
     //     html += `</div>`;
     // }
+
+    if(data.hybrid_analysis) {
+        const ha = data.hybrid_analysis || {};
+        html += `<div class="stat-item"><span class="stat-label"><i class="fa-solid fa-flask-vial"></i> Hybrid Analysis</span>`;
+        if(ha.error) {
+            html += `<div class="api-error-box">${ha.error}</div>`;
+        } else {
+            html += `<div style="margin-top:15px; text-align:center;">
+                <span class="badge badge-${(ha.verdict || 'neutral').toLowerCase()}">${(ha.verdict || 'UNKNOWN').toUpperCase()}</span>
+                ${ha.threat_level !== undefined ? `<p class="text-sm text-muted" style="margin-top:10px;">Niveau de menace: <strong>${ha.threat_level}</strong></p>` : ''}
+                ${ha.report_url ? `<p style="margin-top:12px;"><a href="${ha.report_url}" target="_blank" class="btn btn-primary"><i class="fa-solid fa-external-link"></i> Voir le rapport Hybrid Analysis</a></p>` : ''}
+            </div>`;
+        }
+        html += `</div>`;
+    }
 
     html += `</div></div></div>`;
     el.innerHTML = html;
