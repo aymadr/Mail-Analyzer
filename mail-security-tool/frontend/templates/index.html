@@ -86,7 +86,7 @@
                         <i class="fa-solid fa-shield-halved" style="font-size:3rem; color:var(--primary); margin-bottom:20px; filter:drop-shadow(0 0 12px var(--primary-glow));"></i>
                         <h2 style="font-size:1.8rem; margin-bottom:12px; color:var(--text-primary); font-family:var(--font-heading); font-weight:700;">Bienvenue dans SecAnalyze</h2>
                         <p style="font-size:0.95rem; color:var(--text-muted); line-height:1.6; max-width:600px; margin:0 auto;">
-                            Analyse complète de sécurité email intégrant VirusTotal, URLScan.io, AbuseIPDB et Scamdoc
+                            Analyse complète de sécurité email intégrant VirusTotal, URLScan.io, AbuseIPDB, Scamdoc et Hybrid Analysis
                         </p>
                     </div>
                     
@@ -95,20 +95,21 @@
                         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:16px;">
                             <div class="quick-access-btn" onclick="switchTab('email')">
                                 <i class="fa-solid fa-envelope-open-text"></i>
-                                <span>Analyser Email</span>
+                                <span>Analyse Email</span>
                             </div>
                             <div class="quick-access-btn" onclick="switchTab('attachment')">
                                 <i class="fa-solid fa-file-shield"></i>
-                                <span>Pièce Jointe</span>
+                                <span>Analyse Pièce Jointe</span>
                             </div>
                             <div class="quick-access-btn" onclick="switchTab('url')">
                                 <i class="fa-solid fa-link"></i>
-                                <span>Analyser URL</span>
+                                <span>Analyse URL</span>
                             </div>
                             <div class="quick-access-btn" onclick="switchTab('ip')">
                                 <i class="fa-solid fa-server"></i>
-                                <span>Vérifier IP</span>
+                                <span>Analyse IP</span>
                             </div>
+                            
                         </div>
                     </div>
                     
@@ -160,7 +161,7 @@
                             <div class="upload-zone" id="attachDropZone">
                                 <i class="fa-solid fa-file-virus text-4xl upload-icon"></i>
                                 <h3>Glisser-déposer une pièce jointe</h3>
-                                <p>Calcule SHA256/MD5 et scanne sur VirusTotal</p>
+                                <p>Calcule SHA256/MD5, scanne sur VirusTotal et Hybrid Analysis</p>
                                 <span class="or-separator">OU</span>
                                 <label for="attachmentFile" class="btn btn-outline">
                                     <i class="fa-regular fa-folder-open"></i> Parcourir
