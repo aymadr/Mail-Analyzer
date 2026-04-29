@@ -6,7 +6,7 @@
 const tabConfig = {
     dashboard: { title: "Dashboard Sécurité", desc: "Bienvenue dans SecAnalyze - Choisissez une analyse pour commencer" },
     email: { title: "Inspecteur d'Email", desc: "Parse automatiquement les en-têtes SPF, DKIM, DMARC et analyse les IPs" },
-    attachment: { title: "Sandbox Pièce Jointe", desc: "Calcul de Hash (SHA256, MD5) & Vérification Virustotal + Any.Run si activé" },
+    attachment: { title: "Sandbox Pièce Jointe", desc: "Calcul de Hash (SHA256, MD5) & Vérification Virustotal" },
     url: { title: "Scanner d'URL", desc: "Vérification réputation VirusTotal, Scamdoc et empreinte URLScan" },
     ip: { title: "Threat Intel IP", desc: "Consultation croisée VirusTotal & AbuseIPDB" },
     text: { title: "Analyse de Texte", desc: "Détecte les patterns de phishing: formules, fautes, URLs suspectes" },
@@ -600,7 +600,8 @@ function renderAttachmentResult(data) {
     const el = document.getElementById('attachmentResult');
     const f = data.file || {};
     const vt = data.virustotal || {};
-    const anyrun = data.anyrun || {};
+    // DISABLED: Any.Run API requires paid plan
+    // const anyrun = data.anyrun || {};
     
     let html = `
         <div class="result-card">
@@ -670,22 +671,23 @@ function renderAttachmentResult(data) {
         html += `</div></div>`;
     }
 
-    if (data.anyrun) {
-        const anyrunStatus = (anyrun.status || (anyrun.error ? 'ERROR' : 'UNKNOWN')).toUpperCase();
-        html += `<div class="result-card">
-            <div class="result-header"><i class="fa-solid fa-flask-vial"></i> Any.Run</div>
-            <div class="result-body">
-                <div class="stat-item">
-                    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
-                        <span class="badge ${anyrun.error ? 'badge-suspicious' : 'badge-neutral'}">${anyrunStatus}</span>
-                        ${anyrun.task_id ? `<span class="text-muted text-sm mono">Task: ${anyrun.task_id}</span>` : ''}
-                    </div>
-                    ${anyrun.error ? `<div class="api-error-box">${anyrun.error}</div>` : ''}
-                    ${anyrun.report_url ? `<div style="margin-top:10px;"><a href="${anyrun.report_url}" target="_blank" class="btn btn-primary" style="display:inline-block;"><i class="fa-solid fa-up-right-from-square"></i> Ouvrir le rapport</a></div>` : ''}
-                </div>
-            </div>
-        </div>`;
-    }
+    // DISABLED: Any.Run API requires paid plan
+    // if (data.anyrun) {
+    //     const anyrunStatus = (anyrun.status || (anyrun.error ? 'ERROR' : 'UNKNOWN')).toUpperCase();
+    //     html += `<div class="result-card">
+    //         <div class="result-header"><i class="fa-solid fa-flask-vial"></i> Any.Run</div>
+    //         <div class="result-body">
+    //             <div class="stat-item">
+    //                 <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+    //                     <span class="badge ${anyrun.error ? 'badge-suspicious' : 'badge-neutral'}">${anyrunStatus}</span>
+    //                     ${anyrun.task_id ? `<span class="text-muted text-sm mono">Task: ${anyrun.task_id}</span>` : ''}
+    //                 </div>
+    //                 ${anyrun.error ? `<div class="api-error-box">${anyrun.error}</div>` : ''}
+    //                 ${anyrun.report_url ? `<div style="margin-top:10px;"><a href="${anyrun.report_url}" target="_blank" class="btn btn-primary" style="display:inline-block;"><i class="fa-solid fa-up-right-from-square"></i> Ouvrir le rapport</a></div>` : ''}
+    //             </div>
+    //         </div>
+    //     </div>`;
+    // }
 
     el.innerHTML = html;
     showToast('success', 'Sandbox OK', 'Hashs calculés et analysés.');
@@ -693,7 +695,8 @@ function renderAttachmentResult(data) {
 
 function renderUrlResult(data) {
     const el = document.getElementById('urlResult');
-    const anyrun = data.anyrun || {};
+    // DISABLED: Any.Run API requires paid plan
+    // const anyrun = data.anyrun || {};
     
     let html = `
         <div class="result-card">
@@ -755,21 +758,22 @@ function renderUrlResult(data) {
         html += `</div>`;
     }
 
-    if(data.anyrun) {
-        html += `<div class="stat-item"><span class="stat-label"><i class="fa-solid fa-flask-vial"></i> Any.Run</span>`;
-        if(anyrun.error) {
-            html += `<div class="api-error-box">${anyrun.error}</div>`;
-        } else {
-            html += `
-                <div style="margin-top:15px; text-align:center;">
-                    <span class="badge badge-neutral">${(anyrun.status || 'UNKNOWN').toUpperCase()}</span>
-                    ${anyrun.task_id ? `<p class="text-sm text-muted" style="margin-top:10px;">Task: <span class="mono">${anyrun.task_id}</span></p>` : ''}
-                    ${anyrun.report_url ? `<p style="margin-top:12px;"><a href="${anyrun.report_url}" target="_blank" class="btn btn-primary" style="display:inline-block;"><i class="fa-solid fa-up-right-from-square"></i> Voir le rapport Any.Run</a></p>` : ''}
-                </div>
-            `;
-        }
-        html += `</div>`;
-    }
+    // DISABLED: Any.Run API requires paid plan
+    // if(data.anyrun) {
+    //     html += `<div class="stat-item"><span class="stat-label"><i class="fa-solid fa-flask-vial"></i> Any.Run</span>`;
+    //     if(anyrun.error) {
+    //         html += `<div class="api-error-box">${anyrun.error}</div>`;
+    //     } else {
+    //         html += `
+    //             <div style="margin-top:15px; text-align:center;">
+    //                 <span class="badge badge-neutral">${(anyrun.status || 'UNKNOWN').toUpperCase()}</span>
+    //                 ${anyrun.task_id ? `<p class="text-sm text-muted" style="margin-top:10px;">Task: <span class="mono">${anyrun.task_id}</span></p>` : ''}
+    //                 ${anyrun.report_url ? `<p style="margin-top:12px;"><a href="${anyrun.report_url}" target="_blank" class="btn btn-primary" style="display:inline-block;"><i class="fa-solid fa-up-right-from-square"></i> Voir le rapport Any.Run</a></p>` : ''}
+    //             </div>
+    //         `;
+    //     }
+    //     html += `</div>`;
+    // }
 
     html += `</div></div></div>`;
     el.innerHTML = html;

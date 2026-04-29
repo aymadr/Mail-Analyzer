@@ -12,8 +12,9 @@ from config import (
     VIRUSTOTAL_API_KEY, URLSCAN_API_KEY, ABUSEIPDB_API_KEY,
     SCAMDOC_API_KEY, SCAMDOC_BASE_URL, SCAMDOC_URL_PATH, SCAMDOC_EMAIL_PATH, SCAMDOC_RAPIDAPI_HOST, SCAMDOC_TIMEOUT,
     API_TIMEOUT, MAX_RETRIES,
-    ANYRUN_ENABLED, ANYRUN_API_KEY, ANYRUN_BASE_URL, ANYRUN_SUBMIT_PATH, ANYRUN_REPORT_PATH,
-    ANYRUN_AUTH_HEADER, ANYRUN_AUTH_PREFIX, ANYRUN_TIMEOUT, ANYRUN_MAX_FILESIZE_MB
+    # DISABLED: Any.Run API requires paid plan
+    # ANYRUN_ENABLED, ANYRUN_API_KEY, ANYRUN_BASE_URL, ANYRUN_SUBMIT_PATH, ANYRUN_REPORT_PATH,
+    # ANYRUN_AUTH_HEADER, ANYRUN_AUTH_PREFIX, ANYRUN_TIMEOUT, ANYRUN_MAX_FILESIZE_MB
 )
 
 class APIClient:
@@ -314,144 +315,9 @@ class AbuseIPDBClient(APIClient):
             return {"error": str(e), "source": "AbuseIPDB"}
 
 
-class AnyRunClient(APIClient):
-    """Client Any.Run minimal et configurable.
-
-    Cette intégration reste volontairement générique: les chemins et le schéma
-    d'authentification se pilotent via .env pour coller à l'API Any.Run utilisée.
-    """
-
-    def __init__(self):
-        self.enabled = ANYRUN_ENABLED
-        self.api_key = ANYRUN_API_KEY
-        self.base_url = ANYRUN_BASE_URL.rstrip("/")
-        self.submit_path = ANYRUN_SUBMIT_PATH
-        self.report_path = ANYRUN_REPORT_PATH
-        self.auth_header = ANYRUN_AUTH_HEADER
-        self.auth_prefix = ANYRUN_AUTH_PREFIX
-        self.timeout = ANYRUN_TIMEOUT
-        self.max_filesize_mb = ANYRUN_MAX_FILESIZE_MB
-
-    def _auth_headers(self, content_type: Optional[str] = None, use_prefix: bool = True) -> Dict:
-        headers = {}
-        if self.api_key:
-            token = f"{self.auth_prefix}{self.api_key}" if (use_prefix and self.auth_prefix) else self.api_key
-            headers[self.auth_header] = token
-        if content_type:
-            headers["Content-Type"] = content_type
-        return headers
-
-    def _build_url(self, path: str) -> str:
-        return urljoin(f"{self.base_url}/", path.lstrip("/"))
-
-    def _anyrun_request(self, method: str, path: str, *, content_type: Optional[str] = None, fallback_raw_auth: bool = True, **kwargs) -> requests.Response:
-        url = self._build_url(path)
-        headers = kwargs.pop("headers", {}) or {}
-
-        response = requests.request(
-            method,
-            url,
-            headers={**headers, **self._auth_headers(content_type=content_type, use_prefix=True)},
-            timeout=self.timeout,
-            **kwargs,
-        )
-
-        if fallback_raw_auth and response.status_code in {401, 403} and self.auth_prefix:
-            response = requests.request(
-                method,
-                url,
-                headers={**headers, **self._auth_headers(content_type=content_type, use_prefix=False)},
-                timeout=self.timeout,
-                **kwargs,
-            )
-
-        return response
-
-    def submit_file(self, file_path: str, metadata: Optional[Dict] = None) -> Dict:
-        if not self.enabled:
-            return {"source": "AnyRun", "status": "DISABLED", "message": "Any.Run disabled in config"}
-        if not self.api_key:
-            return {"error": "Any.Run API key not configured", "source": "AnyRun"}
-
-        try:
-            file_size_mb = Path(file_path).stat().st_size / (1024 * 1024)
-            if file_size_mb > self.max_filesize_mb:
-                return {
-                    "source": "AnyRun",
-                    "status": "SKIPPED",
-                    "error": f"File too large for Any.Run (> {self.max_filesize_mb} MB)",
-                }
-        except Exception:
-            pass
-
-        try:
-            with open(file_path, "rb") as file_obj:
-                response = self._anyrun_request(
-                    "post",
-                    self.submit_path,
-                    files={"file": file_obj},
-                    data=metadata or {},
-                )
-            response.raise_for_status()
-            response_data = response.json() if response.text else {}
-            return self._normalize_submit_response(response_data)
-        except Exception as e:
-            return {"error": str(e), "source": "AnyRun"}
-
-    def submit_url(self, url: str, metadata: Optional[Dict] = None) -> Dict:
-        if not self.enabled:
-            return {"source": "AnyRun", "status": "DISABLED", "message": "Any.Run disabled in config"}
-        if not self.api_key:
-            return {"error": "Any.Run API key not configured", "source": "AnyRun"}
-
-        payload = {"url": url}
-        if metadata:
-            payload.update(metadata)
-
-        try:
-            response = self._anyrun_request(
-                "post",
-                self.submit_path,
-                content_type="application/json",
-                json=payload,
-            )
-            response.raise_for_status()
-            response_data = response.json() if response.text else {}
-            return self._normalize_submit_response(response_data)
-        except Exception as e:
-            return {"error": str(e), "source": "AnyRun", "hint": "Any.Run sandbox API access may require a paid plan or a different authorization format."}
-
-    def get_report(self, task_id: str) -> Dict:
-        if not self.enabled:
-            return {"source": "AnyRun", "status": "DISABLED", "message": "Any.Run disabled in config"}
-        if not self.api_key:
-            return {"error": "Any.Run API key not configured", "source": "AnyRun"}
-
-        try:
-            response = self._anyrun_request(
-                "get",
-                self.report_path.format(task_id=task_id),
-            )
-            response.raise_for_status()
-            return {"source": "AnyRun", "task_id": task_id, "report": response.json() if response.text else {}}
-        except Exception as e:
-            return {"error": str(e), "source": "AnyRun"}
-
-    @staticmethod
-    def _normalize_submit_response(data: Dict) -> Dict:
-        task_id = data.get("task_id") or data.get("id") or data.get("uuid") or data.get("taskId")
-        report_url = data.get("report_url") or data.get("reportUrl") or data.get("result_url") or data.get("url")
-        if not report_url and task_id:
-            report_url = f"https://app.any.run/tasks/{task_id}"
-        status = data.get("status") or data.get("state") or ("QUEUED" if task_id else "OK")
-
-        return {
-            "source": "AnyRun",
-            "status": status,
-            "task_id": task_id,
-            "report_url": report_url,
-            "raw": data,
-        }
+# DISABLED: Any.Run API requires paid plan
+# The AnyRunClient class has been disabled as Any.Run sandbox API requires a paid subscription.
+# See config.py for commented-out ANYRUN_* variables if you need to re-enable later.
 
 
 class ScamdocClient(APIClient):

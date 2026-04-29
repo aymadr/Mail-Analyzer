@@ -8,7 +8,8 @@ import requests
 from urllib.parse import urlparse
 from email_parser import EmailHeaderParser
 from hash_calculator import HashCalculator
-from api_clients import VirusTotalClient, URLScanIOClient, AbuseIPDBClient, ScamdocClient, AnyRunClient
+from api_clients import VirusTotalClient, URLScanIOClient, AbuseIPDBClient, ScamdocClient
+# from api_clients import AnyRunClient  # DISABLED: Any.Run API requires paid plan
 from database import Database
 from typing import Dict, List
 
@@ -23,7 +24,7 @@ class SecurityAnalyzer:
         self.urlscan_client = URLScanIOClient()
         self.abuseipdb_client = AbuseIPDBClient()
         self.scamdoc_client = ScamdocClient()
-        self.anyrun_client = AnyRunClient()
+        # self.anyrun_client = AnyRunClient()  # DISABLED: Any.Run API requires paid plan
         self.db = Database()
     
     def analyze_email_file(self, file_path: str) -> Dict:
@@ -109,11 +110,12 @@ class SecurityAnalyzer:
             results["virustotal"][hash_type] = vt_result
             self.db.save_file_hash_analysis(hashes[hash_type], hash_type, vt_result)
 
-        if self.anyrun_client.enabled:
-            anyrun_result = self.anyrun_client.submit_file(file_path, metadata={"file_hash": hashes.get("sha256", "")})
-            results["anyrun"] = anyrun_result
-            if hashes.get("sha256"):
-                self.db.save_file_hash_analysis(hashes["sha256"], "anyrun", anyrun_result)
+        # DISABLED: Any.Run API requires paid plan
+        # if self.anyrun_client.enabled:
+        #     anyrun_result = self.anyrun_client.submit_file(file_path, metadata={"file_hash": hashes.get("sha256", "")})
+        #     results["anyrun"] = anyrun_result
+        #     if hashes.get("sha256"):
+        #         self.db.save_file_hash_analysis(hashes["sha256"], "anyrun", anyrun_result)
         
         return results
     
@@ -127,8 +129,9 @@ class SecurityAnalyzer:
             "scamdoc": self.scamdoc_client.check_url(normalized_url)
         }
 
-        if self.anyrun_client.enabled:
-            results["anyrun"] = self.anyrun_client.submit_url(normalized_url)
+        # DISABLED: Any.Run API requires paid plan
+        # if self.anyrun_client.enabled:
+        #     results["anyrun"] = self.anyrun_client.submit_url(normalized_url)
         
         self.db.save_url_analysis(normalized_url, results)
         return results
