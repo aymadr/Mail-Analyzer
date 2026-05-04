@@ -143,15 +143,51 @@ document.getElementById('emailForm').addEventListener('submit', async (e) => {
 // 2. Attachment Submit
 document.getElementById('attachmentForm').addEventListener('submit', async (e) => {
     e.preventDefault();
+    await submitAttachment('analysis');
+});
+
+const attachmentHashBtn = document.getElementById('attachHashBtn');
+if (attachmentHashBtn) {
+    attachmentHashBtn.addEventListener('click', async () => {
+        await submitAttachment('hash');
+    });
+}
+
+async function submitAttachment(mode) {
     const file = document.getElementById('attachmentFile').files[0];
-    if (!file) return showToast('error', 'Erreur', 'Veuillez sélectionner un fichier.');
-    
-    const formData = new FormData();
-    formData.append('file', file);
-    
+    const hashInput = document.getElementById('attachmentHashInput');
+    const attachmentHash = (hashInput?.value || '').trim();
+
+    if (mode === 'analysis') {
+        if (!file) return showToast('error', 'Erreur', 'Veuillez sélectionner un fichier.');
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        showLoader('attachmentResult');
+        try {
+            const res = await fetch('/api/analyze/attachment', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (res.ok) renderAttachmentResult(data);
+            else throw new Error(data.error || 'Erreur serveur');
+        } catch (err) {
+            showError('attachmentResult');
+            showToast('error', 'Échec de l\'analyse', err.message);
+        }
+        return;
+    }
+
+    if (!attachmentHash) {
+        return showToast('error', 'Erreur', 'Colle un hash dans la barre dédiée.');
+    }
+
     showLoader('attachmentResult');
     try {
-        const res = await fetch('/api/analyze/attachment', { method: 'POST', body: formData });
+        const res = await fetch('/api/analyze/attachment/hash', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_hash: attachmentHash })
+        });
         const data = await res.json();
         if (res.ok) renderAttachmentResult(data);
         else throw new Error(data.error || 'Erreur serveur');
@@ -159,7 +195,7 @@ document.getElementById('attachmentForm').addEventListener('submit', async (e) =
         showError('attachmentResult');
         showToast('error', 'Échec de l\'analyse', err.message);
     }
-});
+}
 
 // 3. URL Submit
 document.getElementById('urlForm').addEventListener('submit', async (e) => {
@@ -598,9 +634,72 @@ function parseEmailContact(rawValue) {
 
 function renderAttachmentResult(data) {
     const el = document.getElementById('attachmentResult');
+    const mode = data.mode || 'analysis';
     const f = data.file || {};
     const vt = data.virustotal || {};
     const ha = data.hybrid_analysis || {};
+
+    if (mode === 'hash') {
+        const inputHash = data.input_hash || data.hash || 'N/A';
+        const hashType = data.hash_type || 'hash';
+        let html = `
+            <div class="result-card">
+                <div class="result-header"><i class="fa-solid fa-fingerprint"></i> Hash collé</div>
+                <div class="result-body">
+                    <div class="stats-grid">
+                        <div class="stat-item"><span class="stat-label">TYPE</span><span class="stat-value">${hashType.toUpperCase()}</span></div>
+                        <div class="stat-item"><span class="stat-label">HASH</span><span class="stat-value mono" style="word-break:break-all;">${inputHash}</span></div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        if (vt) {
+            html += `<div class="result-card">
+                <div class="result-header"><i class="fa-solid fa-bug"></i> Vérification VirusTotal</div>
+                <div class="result-body">`;
+
+            if (vt.error) {
+                html += `<div class="api-error-box">${vt.error}</div>`;
+            } else {
+                html += `
+                    <div style="margin-bottom:10px;">
+                        ${buildVerdictBox(vt.verdict, buildVtStats(vt.stats))}
+                    </div>
+                    ${vt.url ? `<div style="margin-top:10px;"><a href="${vt.url}" target="_blank" class="text-primary">Ouvrir le rapport VirusTotal</a></div>` : ''}
+                `;
+            }
+
+            html += `</div></div>`;
+        }
+
+        if (ha && Object.keys(ha).length > 0) {
+            html += `<div class="result-card">
+                <div class="result-header"><i class="fa-solid fa-flask-vial"></i> Hybrid Analysis</div>
+                <div class="result-body">
+                    <div class="stat-item">`;
+
+            if (ha.error) {
+                html += `<div class="api-error-box">${ha.error}</div>`;
+            } else {
+                html += `
+                    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+                        <span class="badge ${ha.verdict ? 'badge-' + ha.verdict.toLowerCase() : 'badge-neutral'}">${(ha.verdict || 'UNKNOWN').toUpperCase()}</span>
+                        ${ha.sha256 ? `<span class="text-muted text-sm mono" style="word-break:break-all;">${ha.sha256.substring(0, 16)}...</span>` : ''}
+                    </div>
+                    ${ha.threat_level !== undefined ? `<div style="margin-top:8px;"><strong>Niveau de menace:</strong> ${ha.threat_level}</div>` : ''}
+                    ${ha.summary ? `<div style="margin-top:8px; color:var(--text-muted);">${ha.summary}</div>` : ''}
+                    ${ha.report_url ? `<div style="margin-top:10px;"><a href="${ha.report_url}" target="_blank" class="btn btn-primary" style="display:inline-block;"><i class="fa-solid fa-up-right-from-square"></i> Voir le rapport</a></div>` : ''}
+                `;
+            }
+
+            html += `</div></div></div>`;
+        }
+
+        el.innerHTML = html;
+        showToast('success', 'Hash analysé', 'Les APIs ont répondu à partir du hash collé.');
+        return;
+    }
     
     let html = `
         <div class="result-card">

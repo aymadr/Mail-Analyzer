@@ -539,7 +539,7 @@ class ScamdocClient(APIClient):
         self.email_path = SCAMDOC_EMAIL_PATH
         self.rapidapi_host = SCAMDOC_RAPIDAPI_HOST or self._infer_host(self.base_url)
 
-    def check_url(self, url: str) -> Dict:
+    def check_url(self, url: str, timeout: Optional[int] = None) -> Dict:
         """Analyse une URL avec Scamdoc."""
         if not self.api_key:
             return {"error": "Scamdoc API key not configured", "source": "Scamdoc"}
@@ -554,9 +554,9 @@ class ScamdocClient(APIClient):
             "/domain/{domain_name}",
         ]
 
-        return self._request_with_fallback(candidate_paths, payload)
+        return self._request_with_fallback(candidate_paths, payload, timeout=timeout)
 
-    def check_email(self, email_value: str) -> Dict:
+    def check_email(self, email_value: str, timeout: Optional[int] = None) -> Dict:
         """Analyse un email avec Scamdoc."""
         if not self.api_key:
             return {"error": "Scamdoc API key not configured", "source": "Scamdoc"}
@@ -569,13 +569,13 @@ class ScamdocClient(APIClient):
             "/email/{email}",
         ]
 
-        return self._request_with_fallback(candidate_paths, payload)
+        return self._request_with_fallback(candidate_paths, payload, timeout=timeout)
 
-    def _request_with_fallback(self, paths, payload: Dict) -> Dict:
+    def _request_with_fallback(self, paths, payload: Dict, timeout: Optional[int] = None) -> Dict:
         """Essaie plusieurs paths Scamdoc (RapidAPI variants) jusqu'au succès."""
         errors = []
         for candidate in paths:
-            result = self._request(candidate, payload)
+            result = self._request(candidate, payload, timeout=timeout)
             if not result.get("error"):
                 return result
 
@@ -598,7 +598,7 @@ class ScamdocClient(APIClient):
             "endpoint": errors[-1].get("endpoint") if errors else None,
         }
 
-    def _request(self, path: str, payload: Dict) -> Dict:
+    def _request(self, path: str, payload: Dict, timeout: Optional[int] = None) -> Dict:
         endpoint_path = path.format(**payload)
         endpoint = urljoin(f"{self.base_url}/", endpoint_path.lstrip("/"))
         headers = {
@@ -609,11 +609,12 @@ class ScamdocClient(APIClient):
         }
         # Si le path utilise des placeholders, on évite de doubler les infos en query params.
         params = {} if "{" in path else dict(payload)
+        request_timeout = timeout or SCAMDOC_TIMEOUT
 
         try:
-            response = requests.get(endpoint, headers=headers, params=params, timeout=SCAMDOC_TIMEOUT)
+            response = requests.get(endpoint, headers=headers, params=params, timeout=request_timeout)
             if response.status_code >= 400:
-                response = requests.post(endpoint, headers=headers, json=payload, timeout=SCAMDOC_TIMEOUT)
+                response = requests.post(endpoint, headers=headers, json=payload, timeout=request_timeout)
 
             response.raise_for_status()
             data = response.json() if response.text else {}

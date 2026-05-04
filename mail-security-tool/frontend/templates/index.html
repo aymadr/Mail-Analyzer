@@ -161,7 +161,7 @@
                             <div class="upload-zone" id="attachDropZone">
                                 <i class="fa-solid fa-file-virus text-4xl upload-icon"></i>
                                 <h3>Glisser-déposer une pièce jointe</h3>
-                                <p>Calcule SHA256/MD5, scanne sur VirusTotal et Hybrid Analysis</p>
+                                <p>Analyse un fichier ou colle un hash déjà connu pour lancer les recherches d'APIs</p>
                                 <span class="or-separator">OU</span>
                                 <label for="attachmentFile" class="btn btn-outline">
                                     <i class="fa-regular fa-folder-open"></i> Parcourir
@@ -169,9 +169,17 @@
                                 <input type="file" id="attachmentFile" class="hidden-input" required>
                                 <div class="file-name" id="attachFileName"></div>
                             </div>
+                            <div class="input-group" style="margin-top:18px;">
+                                <label for="attachmentHashInput"><i class="fa-solid fa-fingerprint"></i> Hash déjà récupéré</label>
+                                <input type="text" id="attachmentHashInput" class="text-input font-mono" placeholder="Colle ici un MD5, SHA1 ou SHA256 issu du mail">
+                                <p class="help-text">Si tu as déjà le hash depuis l'analyse du mail, colle-le ici pour interroger VirusTotal et les autres APIs.</p>
+                            </div>
                             <div class="action-bar">
+                                <button type="button" class="btn btn-outline" id="attachHashBtn">
+                                    <i class="fa-solid fa-fingerprint"></i> Analyser le hash
+                                </button>
                                 <button type="submit" class="btn btn-primary btn-glow" id="attachBtn">
-                                    <i class="fa-solid fa-magnifying-glass"></i> Lancer l'Analyse
+                                    <i class="fa-solid fa-magnifying-glass"></i> Lancer l'analyse du fichier
                                 </button>
                             </div>
                         </form>

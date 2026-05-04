@@ -102,6 +102,39 @@ def analyze_attachment():
                 except Exception:
                     pass
 
+@app.route('/api/analyze/attachment/hash', methods=['POST'])
+def analyze_attachment_hash():
+    """Analyse une pièce jointe à partir d'un hash déjà connu."""
+    data = request.get_json(silent=True) or {}
+    file_hash = (data.get('file_hash') or data.get('hash') or '').strip()
+
+    if not file_hash:
+        return jsonify({"error": "Hash non fourni"}), 400
+
+    try:
+        hash_type = 'sha256' if len(file_hash) == 64 else ('sha1' if len(file_hash) == 40 else ('md5' if len(file_hash) == 32 else 'hash'))
+
+        vt_result = analyzer.vt_client.check_file_hash(file_hash)
+        ha_result = {}
+        if hash_type == 'sha256' and analyzer.hybrid_analysis_client.enabled:
+            ha_result = analyzer.hybrid_analysis_client.get_report(file_hash)
+
+        result = {
+            'mode': 'hash',
+            'input_hash': file_hash,
+            'hash_type': hash_type,
+            'virustotal': vt_result,
+            'hybrid_analysis': ha_result,
+        }
+
+        analyzer.db.save_file_hash_analysis(file_hash, hash_type, vt_result)
+        if ha_result and not ha_result.get('error'):
+            analyzer.db.save_file_hash_analysis(file_hash, 'hybrid_analysis', ha_result)
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/analyze/url', methods=['POST'])
 def analyze_url():
     """Analyse une URL"""

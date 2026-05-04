@@ -14,8 +14,8 @@ from database import Database
 from typing import Dict, List
 
 class SecurityAnalyzer:
-    MAX_EMAIL_URL_REDIRECTS = 25
-    MAX_EMAIL_URL_SCAMDOC = 10
+    MAX_EMAIL_URL_REDIRECTS = 8
+    MAX_EMAIL_URL_SCAMDOC = 5
 
     def __init__(self):
         self.email_parser = EmailHeaderParser()
@@ -197,8 +197,14 @@ class SecurityAnalyzer:
             unique_urls.append(value)
 
         redirects = []
-        for url in unique_urls[: self.MAX_EMAIL_URL_REDIRECTS]:
-            redirects.append(self._resolve_redirect_chain(url))
+        with ThreadPoolExecutor(max_workers=min(4, max(1, len(unique_urls[: self.MAX_EMAIL_URL_REDIRECTS])))) as executor:
+            future_map = {
+                executor.submit(self._resolve_redirect_chain, url): url
+                for url in unique_urls[: self.MAX_EMAIL_URL_REDIRECTS]
+            }
+
+            for future in as_completed(future_map):
+                redirects.append(future.result())
 
         return {
             "extracted": items,
@@ -249,7 +255,7 @@ class SecurityAnalyzer:
             response = session.head(
                 url,
                 allow_redirects=True,
-                timeout=8,
+                timeout=4,
             )
             chain = format_chain(response)
             return {
@@ -265,7 +271,7 @@ class SecurityAnalyzer:
                 response = session.get(
                     url,
                     allow_redirects=True,
-                    timeout=8,
+                    timeout=4,
                     stream=True,
                 )
                 chain = format_chain(response)
@@ -294,7 +300,7 @@ class SecurityAnalyzer:
 
         sender_domain = self._extract_domain_from_email(sender_email)
         if sender_domain and not self._is_local_email_domain(sender_domain):
-            sender_result = self.scamdoc_client.check_url(f"https://{sender_domain}")
+            sender_result = self.scamdoc_client.check_url(f"https://{sender_domain}", timeout=10)
         elif sender_domain:
             sender_result = {
                 "source": "Scamdoc",
@@ -312,7 +318,6 @@ class SecurityAnalyzer:
             "error": "Recipient Scamdoc check disabled (sender-focused mode)",
         }
 
-        url_checks = []
         extracted = url_results.get("extracted", [])
         unique_urls = []
         seen = set()
@@ -323,11 +328,19 @@ class SecurityAnalyzer:
             seen.add(normalized)
             unique_urls.append(normalized)
 
-        for value in unique_urls[: self.MAX_EMAIL_URL_SCAMDOC]:
-            url_checks.append({
-                "url": value,
-                "result": self.scamdoc_client.check_url(value)
-            })
+        url_checks = []
+        with ThreadPoolExecutor(max_workers=min(4, max(1, len(unique_urls[: self.MAX_EMAIL_URL_SCAMDOC])))) as executor:
+            future_map = {
+                executor.submit(self.scamdoc_client.check_url, value, 10): value
+                for value in unique_urls[: self.MAX_EMAIL_URL_SCAMDOC]
+            }
+
+            for future in as_completed(future_map):
+                value = future_map[future]
+                url_checks.append({
+                    "url": value,
+                    "result": future.result()
+                })
 
         return {
             "sender_email": sender_email,
