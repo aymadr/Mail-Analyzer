@@ -177,16 +177,7 @@ def analyze_ip():
         return jsonify({"error": "Format IP invalide (IPv4 ou IPv6 attendu)"}), 400
     
     try:
-        vt_result = analyzer.vt_client.check_ip(ip)
-        abuseipdb_result = analyzer.abuseipdb_client.check_ip(ip)
-        
-        result = {
-            "ip": ip,
-            "virustotal": vt_result,
-            "abuseipdb": abuseipdb_result
-        }
-        
-        analyzer.db.save_ip_analysis(ip, result)
+        result = analyzer.analyze_ip(ip)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500

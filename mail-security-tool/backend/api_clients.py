@@ -15,7 +15,8 @@ from config import (
     VIRUSTOTAL_API_KEY, URLSCAN_API_KEY, ABUSEIPDB_API_KEY,
     SCAMDOC_API_KEY, SCAMDOC_BASE_URL, SCAMDOC_URL_PATH, SCAMDOC_EMAIL_PATH, SCAMDOC_RAPIDAPI_HOST, SCAMDOC_TIMEOUT,
     API_TIMEOUT, MAX_RETRIES,
-    HYBRID_ANALYSIS_ENABLED, HYBRID_ANALYSIS_API_KEY, HYBRID_ANALYSIS_BASE_URL, HYBRID_ANALYSIS_USER_AGENT, HYBRID_ANALYSIS_TIMEOUT, HYBRID_ANALYSIS_MAX_FILESIZE_MB
+    HYBRID_ANALYSIS_ENABLED, HYBRID_ANALYSIS_API_KEY, HYBRID_ANALYSIS_BASE_URL, HYBRID_ANALYSIS_USER_AGENT, HYBRID_ANALYSIS_TIMEOUT, HYBRID_ANALYSIS_MAX_FILESIZE_MB,
+    MXTOOLBOX_ENABLED, MXTOOLBOX_API_KEY, MXTOOLBOX_BASE_URL, MXTOOLBOX_TIMEOUT
 )
 
 class APIClient:
@@ -821,6 +822,232 @@ class ScamdocClient(APIClient):
             return "CLEAN"
 
         return "UNKNOWN"
+
+
+class MXToolboxClient(APIClient):
+    """Client MXToolbox - Lookup DNS infrastructure: MX, SPF, DKIM, DMARC, PTR, RBL"""
+    
+    def __init__(self):
+        self.enabled = MXTOOLBOX_ENABLED
+        self.api_key = MXTOOLBOX_API_KEY
+        self.base_url = MXTOOLBOX_BASE_URL.rstrip("/")
+        self.timeout = MXTOOLBOX_TIMEOUT
+
+    def lookup(self, command: str, argument: str, port: Optional[int] = None) -> Dict:
+        """Generic MXToolbox lookup. Commands: mx, spf, dkim, dmarc, ptr, blacklist, dns, etc."""
+        if not self.enabled or not self.api_key:
+            return {"error": "MXToolbox not configured", "source": "MXToolbox"}
+
+        try:
+            params = {"argument": argument}
+            if port:
+                params["port"] = port
+
+            url = f"{self.base_url}/Lookup/{command}"
+            headers = {"Authorization": self.api_key}
+            
+            response = requests.get(url, headers=headers, params=params, timeout=self.timeout)
+            response.raise_for_status()
+            data = response.json()
+            
+            # MXToolbox returns {"IsError": bool, "Information": [...], "Errors": [...], ...}
+            if data.get("IsError"):
+                errors = data.get("Errors", [])
+                error_msg = errors[0] if errors else "Unknown error"
+                return {"error": f"MXToolbox error: {error_msg}", "source": "MXToolbox"}
+            
+            return {
+                "source": "MXToolbox",
+                "command": command,
+                "argument": argument,
+                "data": data
+            }
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                return {"error": "Lookup not found", "source": "MXToolbox"}
+            elif e.response.status_code == 429:
+                return {"error": "Rate limit exceeded", "source": "MXToolbox"}
+            return {"error": f"HTTP {e.response.status_code}: {str(e)}", "source": "MXToolbox"}
+        except Exception as e:
+            return {"error": str(e), "source": "MXToolbox"}
+
+    def check_domain_dns(self, domain: str) -> Dict:
+        """Check MX, SPF, DKIM, DMARC records for domain."""
+        if not self.enabled or not self.api_key:
+            return {"error": "MXToolbox not configured", "source": "MXToolbox"}
+
+        domain = domain.strip().lower()
+        
+        results = {
+            "source": "MXToolbox",
+            "domain": domain,
+            "records": {}
+        }
+
+        # Check MX records
+        mx_result = self.lookup("mx", domain)
+        if not mx_result.get("error"):
+            data = mx_result.get("data", {})
+            information = data.get("Information", [])
+            mx_records = []
+            for info in information:
+                if info.get("Type") == "MX":
+                    mx_records.append(info)
+            results["records"]["mx"] = mx_records if mx_records else None
+        else:
+            results["records"]["mx"] = None
+
+        # Check SPF record
+        spf_result = self.lookup("spf", domain)
+        if not spf_result.get("error"):
+            data = spf_result.get("data", {})
+            information = data.get("Information", [])
+            spf_record = None
+            for info in information:
+                if info.get("Type") == "SPF":
+                    spf_record = info
+                    break
+            results["records"]["spf"] = spf_record
+        else:
+            results["records"]["spf"] = None
+
+        # Check DKIM record
+        dkim_result = self.lookup("dkim", domain)
+        if not dkim_result.get("error"):
+            data = dkim_result.get("data", {})
+            information = data.get("Information", [])
+            dkim_record = None
+            for info in information:
+                if info.get("Type") == "DKIM":
+                    dkim_record = info
+                    break
+            results["records"]["dkim"] = dkim_record
+        else:
+            results["records"]["dkim"] = None
+
+        # Check DMARC record
+        dmarc_result = self.lookup("dmarc", domain)
+        if not dmarc_result.get("error"):
+            data = dmarc_result.get("data", {})
+            information = data.get("Information", [])
+            dmarc_record = None
+            for info in information:
+                if info.get("Type") == "DMARC":
+                    dmarc_record = info
+                    break
+            results["records"]["dmarc"] = dmarc_record
+        else:
+            results["records"]["dmarc"] = None
+
+        return results
+
+    def check_ptr(self, ip: str) -> Dict:
+        """Reverse DNS lookup - get hostname from IP."""
+        if not self.enabled or not self.api_key:
+            return {"error": "MXToolbox not configured", "source": "MXToolbox"}
+
+        try:
+            ptr_result = self.lookup("ptr", ip)
+            
+            if ptr_result.get("error"):
+                return ptr_result
+            
+            # Extract PTR record from Information array
+            data = ptr_result.get("data", {})
+            information = data.get("Information", [])
+            
+            hostname = None
+            for info in information:
+                if info.get("Type") == "PTR":
+                    hostname = info.get("Domain Name")
+                    break
+            
+            return {
+                "source": "MXToolbox",
+                "ip": ip,
+                "hostname": hostname,
+                "status": "found" if hostname else "not_found"
+            }
+        except Exception as e:
+            return {"error": str(e), "source": "MXToolbox"}
+
+    def check_rbl(self, domain_or_ip: str) -> Dict:
+        """Check if domain/IP is listed on email blacklists (RBL)."""
+        if not self.enabled or not self.api_key:
+            return {"error": "MXToolbox not configured", "source": "MXToolbox"}
+
+        try:
+            blacklist_result = self.lookup("blacklist", domain_or_ip)
+            
+            if blacklist_result.get("error"):
+                return blacklist_result
+            
+            data = blacklist_result.get("data", {})
+            
+            # Check if there are any errors or if it's listed on blacklists
+            is_error = data.get("IsError", False)
+            failed = data.get("Failed", [])
+            errors = data.get("Errors", [])
+            
+            # If there are entries in Failed or Errors, it's likely listed on blacklists
+            is_blacklisted = is_error or len(failed) > 0 or len(errors) > 0
+            
+            status = "Blacklisted" if is_blacklisted else "Not Blacklisted"
+            if errors:
+                status = errors[0] if isinstance(errors, list) and len(errors) > 0 else str(errors)
+            
+            return {
+                "source": "MXToolbox",
+                "target": domain_or_ip,
+                "blacklisted": is_blacklisted,
+                "status": status
+            }
+        except Exception as e:
+            return {"error": str(e), "source": "MXToolbox"}
+
+    def check_email_domain(self, email: str) -> Dict:
+        """Validate email domain - check if MX records exist."""
+        if not self.enabled or not self.api_key:
+            return {"error": "MXToolbox not configured", "source": "MXToolbox"}
+
+        try:
+            email = email.strip().lower()
+            if "@" not in email:
+                return {"error": "Invalid email format", "source": "MXToolbox"}
+            
+            domain = email.split("@")[1]
+            mx_result = self.lookup("mx", domain)
+            
+            if mx_result.get("error"):
+                return {
+                    "source": "MXToolbox",
+                    "email": email,
+                    "domain": domain,
+                    "valid": False,
+                    "error": mx_result.get("error")
+                }
+            
+            data = mx_result.get("data", {})
+            information = data.get("Information", [])
+            
+            # Extract MX records from Information array
+            mx_records = []
+            for info in information:
+                if info.get("Type") == "MX":
+                    mx_records.append(info)
+            
+            valid = len(mx_records) > 0
+            
+            return {
+                "source": "MXToolbox",
+                "email": email,
+                "domain": domain,
+                "valid": valid,
+                "mx_count": len(mx_records),
+                "mx_records": mx_records[:3] if mx_records else []
+            }
+        except Exception as e:
+            return {"error": str(e), "source": "MXToolbox"}
 
 
 if __name__ == "__main__":

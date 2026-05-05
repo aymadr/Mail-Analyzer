@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from email_parser import EmailHeaderParser
 from hash_calculator import HashCalculator
-from api_clients import VirusTotalClient, URLScanIOClient, AbuseIPDBClient, ScamdocClient, HybridAnalysisClient
+from api_clients import VirusTotalClient, URLScanIOClient, AbuseIPDBClient, ScamdocClient, HybridAnalysisClient, MXToolboxClient
 from database import Database
 from config import VIRUSTOTAL_API_KEY, HYBRID_ANALYSIS_API_KEY, HYBRID_ANALYSIS_ENABLED
 from typing import Dict, List
@@ -26,6 +26,7 @@ class SecurityAnalyzer:
         self.abuseipdb_client = AbuseIPDBClient()
         self.scamdoc_client = ScamdocClient()
         self.hybrid_analysis_client = HybridAnalysisClient()
+        self.mxtoolbox_client = MXToolboxClient()
         self.db = Database()
     
     def analyze_email_file(self, file_path: str) -> Dict:
@@ -141,13 +142,45 @@ class SecurityAnalyzer:
         
         return results
     
+    def analyze_ip(self, ip: str) -> Dict:
+        """Analyse complète d'une adresse IP"""
+        results = {"ip": ip}
+        
+        # Utilise ThreadPoolExecutor pour appeler les APIs en parallèle
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {
+                'virustotal': executor.submit(self.vt_client.check_ip, ip),
+                'abuseipdb': executor.submit(self.abuseipdb_client.check_ip, ip),
+                'mxtoolbox_ptr': executor.submit(self.mxtoolbox_client.check_ptr, ip),
+                'mxtoolbox_rbl': executor.submit(self.mxtoolbox_client.check_rbl, ip)
+            }
+            
+            # Attendre que tous les résultats reviennent
+            for api_name, future in futures.items():
+                try:
+                    result = future.result(timeout=30)
+                    results[api_name] = result
+                except Exception as e:
+                    results[api_name] = {"error": str(e)}
+        
+        # Sauvegarde en BD
+        self.db.save_ip_analysis(ip, results)
+        return results
+
     def analyze_url(self, url: str) -> Dict:
         """Analyse complète d'une URL"""
         normalized_url = self._normalize_url(url)
         results = {"url": normalized_url}
         
+        # Extraire le domaine pour les checks MXToolbox
+        try:
+            from urllib.parse import urlparse
+            domain = urlparse(normalized_url).netloc.lower()
+        except Exception:
+            domain = None
+        
         # Utilise ThreadPoolExecutor pour appeler les APIs en parallèle
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {
                 'virustotal': executor.submit(self.vt_client.check_url_and_wait, normalized_url, 90, 3),
                 'urlscan': executor.submit(self.urlscan_client.scan_url, normalized_url),
@@ -161,6 +194,12 @@ class SecurityAnalyzer:
                     None,
                     normalized_url,
                     90,
+                )
+            
+            # Submit MXToolbox DNS checks (if domain extracted)
+            if domain:
+                futures['mxtoolbox_dns'] = executor.submit(
+                    self.mxtoolbox_client.check_domain_dns, domain
                 )
             
             # Attendre que tous les résultats reviennent
@@ -331,6 +370,16 @@ class SecurityAnalyzer:
                 "error": "Sender email/domain not found",
             }
 
+        # MXToolbox: valider le domaine sender (MX records exist ?)
+        mxtoolbox_sender = {}
+        if sender_email and not self._is_local_email_domain(sender_domain):
+            mxtoolbox_sender = self.mxtoolbox_client.check_email_domain(sender_email)
+        elif sender_domain:
+            mxtoolbox_sender = {
+                "source": "MXToolbox",
+                "error": "Sender domain is local/internal and is skipped"
+            }
+
         # Selon la demande, on n'analyse pas le destinataire via Scamdoc.
         recipient_result = {
             "source": "Scamdoc",
@@ -365,6 +414,7 @@ class SecurityAnalyzer:
             "sender_email": sender_email,
             "sender_domain": sender_domain,
             "sender": sender_result,
+            "sender_mxtoolbox": mxtoolbox_sender,
             "recipient_email": recipient_email,
             "recipient": recipient_result,
             "urls": url_checks,

@@ -36,8 +36,15 @@ API_TIMEOUT = 10
 MAX_RETRIES = 3
 SCAMDOC_TIMEOUT = 30
 
+# MXToolbox DNS API integration
+MXTOOLBOX_ENABLED = to_bool(os.getenv("MXTOOLBOX_ENABLED", "true"))
+MXTOOLBOX_API_KEY = os.getenv("MXTOOLBOX_API_KEY", "")
+MXTOOLBOX_BASE_URL = os.getenv("MXTOOLBOX_BASE_URL", "https://mxtoolbox.com/api/v1")
+MXTOOLBOX_TIMEOUT = int(os.getenv("MXTOOLBOX_TIMEOUT", "10"))
+
 # Rate limiting (requêtes par seconde)
 VIRUSTOTAL_RATE_LIMIT = 4  # 4 req/min gratuit
 URLSCAN_RATE_LIMIT = 1
 ABUSEIPDB_RATE_LIMIT = 1
 SCAMDOC_RATE_LIMIT = 1
+MXTOOLBOX_RATE_LIMIT = 1

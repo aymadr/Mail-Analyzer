@@ -399,16 +399,31 @@ function renderEmailResult(data) {
     if (data.scamdoc) {
         const scamdoc = data.scamdoc || {};
         const senderResult = scamdoc.sender || {};
+        const mxSenderResult = scamdoc.sender_mxtoolbox || {};
         const scamUrls = scamdoc.urls || [];
 
         html += `<div class="result-card">
-            <div class="result-header"><i class="fa-solid fa-user-secret"></i> Scamdoc / ScamPredictor</div>
+            <div class="result-header"><i class="fa-solid fa-user-secret"></i> Scamdoc / MXToolbox - Expéditeur</div>
             <div class="result-body">
                 <div class="stats-grid">
                     <div class="stat-item">
-                        <span class="stat-label">EXPÉDITEUR</span>
+                        <span class="stat-label">SCAMDOC RÉPUTATION</span>
                         <div class="text-sm text-muted" style="margin-bottom:8px; word-break:break-all;">${scamdoc.sender_email || 'N/A'}</div>
                         ${buildScamdocBox(senderResult)}
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">MXTOOLBOX VALIDATION</span>
+                        ${mxSenderResult.error ? `<div class="api-error-box">${mxSenderResult.error}</div>` : `
+                            <div style="margin-top:15px; text-align:center;">
+                                ${mxSenderResult.valid ? `
+                                    <span class="badge badge-clean"><i class="fa-solid fa-check"></i> Domaine Valide</span>
+                                    <p class="text-sm text-muted" style="margin-top:10px;">MX Records: <strong>${mxSenderResult.mx_count || 0}</strong></p>
+                                ` : `
+                                    <span class="badge badge-danger"><i class="fa-solid fa-x"></i> Domaine Invalide</span>
+                                    <p class="text-sm text-muted" style="margin-top:10px;">Aucun MX record trouvé</p>
+                                `}
+                            </div>
+                        `}
                     </div>
                 </div>
             </div>
@@ -869,9 +884,8 @@ function renderAttachmentResult(data) {
 
 function renderUrlResult(data) {
     const el = document.getElementById('urlResult');
-    // DISABLED: Any.Run API requires paid plan
-    // const anyrun = data.anyrun || {};
     const ha = data.hybrid_analysis || {};
+    const mxDns = data.mxtoolbox_dns || {};
     
     let html = `
         <div class="result-card">
@@ -904,7 +918,6 @@ function renderUrlResult(data) {
         html += `<div class="stat-item"><span class="stat-label"><i class="fa-solid fa-camera"></i> URLScan.io</span>`;
         if(data.urlscan.error) html += `<div class="api-error-box">${data.urlscan.error}</div>`;
         else if(data.urlscan.ready) {
-            // Rapport prêt, afficher le lien direct
             html += `<div style="margin-top:15px; text-align:center;">
                 <span class="badge badge-clean"><i class="fa-solid fa-check"></i> Rapport Prêt</span>
                 <p style="margin-top:12px;">
@@ -915,7 +928,6 @@ function renderUrlResult(data) {
             </div>`;
         }
         else {
-            // Rapport pas prêt (timeout)
             const scanId = data.urlscan.scan_id || 'unknown';
             html += `<div style="margin-top:15px; text-align:center;">
                 <span class="badge badge-neutral"><i class="fa-solid fa-hourglass-end"></i> Rapport indisponible</span>
@@ -933,16 +945,28 @@ function renderUrlResult(data) {
         html += `</div>`;
     }
 
-    // DISABLED: Any.Run API requires paid plan
-    // if(data.anyrun) {
-    //     html += `<div class="stat-item"><span class="stat-label"><i class="fa-solid fa-flask-vial"></i> Any.Run</span>`;
-    //     if(anyrun.error) {
-    //         html += `<div class="api-error-box">${anyrun.error}</div>`;
-    //     } else {
-    //         html += ` ... `;
-    //     }
-    //     html += `</div>`;
-    // }
+    // MXToolbox DNS
+    if(mxDns) {
+        html += `<div class="stat-item"><span class="stat-label"><i class="fa-solid fa-network-wired"></i> MXToolbox DNS</span>`;
+        if(mxDns.error) {
+            html += `<div class="api-error-box">${mxDns.error}</div>`;
+        } else {
+            const records = mxDns.records || {};
+            const mxCount = (records.mx && records.mx.length) || 0;
+            const hasSPF = records.spf ? 'OUI' : 'NON';
+            const hasDKIM = records.dkim ? 'OUI' : 'NON';
+            const hasDMARC = records.dmarc ? 'OUI' : 'NON';
+            html += `<div style="margin-top:15px; text-align:center;">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:0.9rem;">
+                    <div><span style="color:var(--text-muted);">MX Records:</span> <strong>${mxCount}</strong></div>
+                    <div><span style="color:var(--text-muted);">SPF:</span> <strong>${hasSPF}</strong></div>
+                    <div><span style="color:var(--text-muted);">DKIM:</span> <strong>${hasDKIM}</strong></div>
+                    <div><span style="color:var(--text-muted);">DMARC:</span> <strong>${hasDMARC}</strong></div>
+                </div>
+            </div>`;
+        }
+        html += `</div>`;
+    }
 
     if(data.hybrid_analysis) {
         const ha = data.hybrid_analysis || {};
@@ -969,6 +993,8 @@ function renderIpResult(data) {
     const el = document.getElementById('ipResult');
     const vt = data.virustotal || {};
     const ab = data.abuseipdb || {};
+    const mxPtr = data.mxtoolbox_ptr || {};
+    const mxRbl = data.mxtoolbox_rbl || {};
 
     let html = `
         <div class="result-card">
@@ -976,6 +1002,35 @@ function renderIpResult(data) {
             <div class="result-body">
                 <div class="stats-grid">
     `;
+
+    // MXToolbox PTR
+    html += `<div class="stat-item"><span class="stat-label"><i class="fa-solid fa-network-wired"></i> MXToolbox PTR</span>`;
+    if(mxPtr.error) html += `<div class="api-error-box">${mxPtr.error}</div>`;
+    else if(mxPtr.hostname) {
+        html += `<div style="margin-top:15px; text-align:center;">
+            <span class="badge badge-clean"><i class="fa-solid fa-check"></i> Reverse DNS</span>
+            <p style="margin-top:12px; word-break:break-all; font-family:var(--font-mono); font-size:0.9rem;">${mxPtr.hostname}</p>
+        </div>`;
+    } else {
+        html += `<div style="margin-top:15px; text-align:center; color:var(--text-muted);">
+            <span class="badge badge-neutral">Non trouvé</span>
+        </div>`;
+    }
+    html += `</div>`;
+
+    // MXToolbox RBL
+    html += `<div class="stat-item"><span class="stat-label"><i class="fa-solid fa-ban"></i> MXToolbox RBL</span>`;
+    if(mxRbl.error) html += `<div class="api-error-box">${mxRbl.error}</div>`;
+    else {
+        const isBlacklisted = mxRbl.blacklisted === true;
+        const badgeType = isBlacklisted ? 'danger' : 'clean';
+        const badgeText = isBlacklisted ? 'LISTÉE' : 'NON LISTÉE';
+        html += `<div style="margin-top:15px; text-align:center;">
+            <span class="badge badge-${badgeType}">${badgeText}</span>
+            <p class="text-sm text-muted" style="margin-top:8px;">${mxRbl.status || 'Status inconnu'}</p>
+        </div>`;
+    }
+    html += `</div>`;
 
     // AbuseIPDB
     html += `<div class="stat-item"><span class="stat-label"><i class="fa-solid fa-triangle-exclamation"></i> AbuseIPDB</span>`;
