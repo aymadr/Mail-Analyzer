@@ -110,6 +110,55 @@ class VirusTotalClient(APIClient):
         except Exception as e:
             return {"error": str(e), "source": "VirusTotal"}
 
+    def check_url_and_wait(self, url: str, timeout: int = 90, interval: int = 3) -> Dict:
+        """Analyse une URL et attend un verdict final quand le scan est en file d'attente."""
+        initial = self.check_url(url)
+        if initial.get("error"):
+            return initial
+
+        if initial.get("status") != "QUEUED":
+            return initial
+
+        analysis_id = initial.get("analysis_id")
+        if not analysis_id:
+            return initial
+
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                response = requests.get(
+                    f"{self.BASE_URL}/analyses/{analysis_id}",
+                    headers=self.headers,
+                    timeout=API_TIMEOUT,
+                )
+                response.raise_for_status()
+                data = response.json()
+                attrs = data.get("data", {}).get("attributes", {})
+                status = attrs.get("status")
+
+                if status == "completed":
+                    stats = attrs.get("stats") or attrs.get("last_analysis_stats") or {}
+                    return {
+                        "source": "VirusTotal",
+                        "url": url,
+                        "analysis_id": analysis_id,
+                        "stats": stats,
+                        "verdict": self._verdict_from_stats(stats),
+                    }
+            except Exception:
+                # Continuer le polling jusqu'au timeout
+                pass
+
+            time.sleep(interval)
+
+        return {
+            "source": "VirusTotal",
+            "url": url,
+            "status": "QUEUED",
+            "analysis_id": analysis_id,
+            "message": "Analyse URL VirusTotal en cours (timeout polling).",
+        }
+
     def check_file(self, file_path: str, file_hash: Optional[str] = None) -> Dict:
         """Analyse un fichier: hash lookup puis upload si inconnu"""
         if not self.api_key:
@@ -176,6 +225,16 @@ class VirusTotalClient(APIClient):
             return "SUSPICIOUS"
         else:
             return "CLEAN"
+
+    @staticmethod
+    def _verdict_from_stats(stats: Dict) -> str:
+        """Analyse le verdict à partir d'un dictionnaire stats déjà extrait."""
+        malicious = stats.get("malicious", 0)
+        if malicious > 5:
+            return "MALICIOUS"
+        if malicious > 0:
+            return "SUSPICIOUS"
+        return "CLEAN"
 
 
 class URLScanIOClient(APIClient):

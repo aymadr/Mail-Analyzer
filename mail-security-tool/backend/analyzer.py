@@ -149,7 +149,7 @@ class SecurityAnalyzer:
         # Utilise ThreadPoolExecutor pour appeler les APIs en parallèle
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = {
-                'virustotal': executor.submit(self.vt_client.check_url, normalized_url),
+                'virustotal': executor.submit(self.vt_client.check_url_and_wait, normalized_url, 90, 3),
                 'urlscan': executor.submit(self.urlscan_client.scan_url, normalized_url),
                 'scamdoc': executor.submit(self.scamdoc_client.check_url, normalized_url)
             }
@@ -166,7 +166,7 @@ class SecurityAnalyzer:
             # Attendre que tous les résultats reviennent
             for api_name, future in futures.items():
                 try:
-                    wait_timeout = 90 if api_name == 'hybrid_analysis' else 30
+                    wait_timeout = 90 if api_name in ('hybrid_analysis', 'virustotal') else 30
                     result = future.result(timeout=wait_timeout)
                     results[api_name] = result
                 except Exception as e:
