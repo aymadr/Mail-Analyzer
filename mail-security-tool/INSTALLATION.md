@@ -23,13 +23,28 @@ pip install -r requirements.txt
 
 # 4. Configurer les clés API
 # Éditer le fichier .env avec tes clés VirusTotal, URLScan, AbuseIPDB, Scamdoc
-
-# 5. Lancer l'application
+# 4. Configurer les clés API
+# Éditer le fichier .env avec tes clés API VirusTotal, URLScan, AbuseIPDB, Scamdoc, MXToolbox
 python run.py
 ```
 
 **Méthode 1C - Via CMD (Invite de commande)**
 ```batch
+
+### 5. MXToolbox
+1. Aller sur https://mxtoolbox.com/c/products/mxtoolboxapi
+2. Créer un compte / récupérer ta clé API
+3. Ajouter la clé dans le fichier `.env`
+
+```env
+MXTOOLBOX_ENABLED=true
+MXTOOLBOX_API_KEY=b35650cd-e23b-48e5-a5cb-f8584cbdb2c2
+MXTOOLBOX_BASE_URL=https://mxtoolbox.com/api/v1
+```
+
+**Notes:**
+- La clé MXToolbox se passe dans le header `Authorization` sans préfixe `Bearer`
+- Les lookups `dns`, `mx`, `spf`, `dmarc`, `blacklist`, `ptr`, `http` et `https` sont utilisés par l'application
 REM 1. Aller au dossier
 cd mail-security-tool
 
