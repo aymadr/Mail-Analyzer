@@ -953,6 +953,7 @@ function renderUrlResult(data) {
             html += `<div style="margin-top:15px; text-align:center;">
                 <span class="badge badge-${(ha.verdict || 'neutral').toLowerCase()}">${(ha.verdict || 'UNKNOWN').toUpperCase()}</span>
                 ${ha.threat_level !== undefined ? `<p class="text-sm text-muted" style="margin-top:10px;">Niveau de menace: <strong>${ha.threat_level}</strong></p>` : ''}
+                ${ha.message ? `<p class="text-sm text-muted" style="margin-top:10px;">${ha.message}</p>` : ''}
                 ${ha.report_url ? `<p style="margin-top:12px;"><a href="${ha.report_url}" target="_blank" class="btn btn-primary"><i class="fa-solid fa-external-link"></i> Voir le rapport Hybrid Analysis</a></p>` : ''}
             </div>`;
         }

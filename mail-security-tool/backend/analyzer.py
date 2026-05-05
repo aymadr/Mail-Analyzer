@@ -157,13 +157,17 @@ class SecurityAnalyzer:
             # Submit Hybrid Analysis (if enabled)
             if self.hybrid_analysis_client.enabled:
                 futures['hybrid_analysis'] = executor.submit(
-                    self.hybrid_analysis_client.submit_url, normalized_url
+                    self.hybrid_analysis_client.submit_and_wait,
+                    None,
+                    normalized_url,
+                    90,
                 )
             
             # Attendre que tous les résultats reviennent
             for api_name, future in futures.items():
                 try:
-                    result = future.result(timeout=30)
+                    wait_timeout = 90 if api_name == 'hybrid_analysis' else 30
+                    result = future.result(timeout=wait_timeout)
                     results[api_name] = result
                 except Exception as e:
                     results[api_name] = {"error": str(e)}
@@ -174,13 +178,22 @@ class SecurityAnalyzer:
 
     @staticmethod
     def _normalize_url(url: str) -> str:
-        """Ajoute https:// si aucun schéma n'est présent."""
+        """Normalise les URLs et convertit les schémas obfusqués hxxp/hxxps."""
         value = (url or "").strip()
         if not value:
             return value
+
+        # Déobfuscation courante dans les IOC: hxxp://, hxxps://, hxxps;//
+        value = re.sub(r"^hxxps\s*[:;]\s*/{2}", "https://", value, flags=re.IGNORECASE)
+        value = re.sub(r"^hxxp\s*[:;]\s*/{2}", "http://", value, flags=re.IGNORECASE)
+
         parsed = urlparse(value)
         if not parsed.scheme:
             return f"https://{value}"
+        if parsed.scheme.lower() == "hxxps":
+            return "https://" + value.split(":", 1)[1].lstrip("/")
+        if parsed.scheme.lower() == "hxxp":
+            return "http://" + value.split(":", 1)[1].lstrip("/")
         return value
     
     def get_report(self, email_hash: str) -> Dict:

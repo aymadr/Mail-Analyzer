@@ -418,12 +418,17 @@ class HybridAnalysisClient(APIClient):
             result = response.json()
             logger.info(f"[HybridAnalysis] submit_url response keys: {result.keys()}")
             logger.info(f"[HybridAnalysis] Full response: {result}")
+            sha256 = result.get("sha256") or result.get("sample_sha256")
+            job_id = result.get("job_id") or result.get("id") or result.get("uuid") or result.get("submission_id")
             return {
                 "source": "HybridAnalysis",
                 "status": "SUBMITTED",
-                "job_id": result.get("job_id"),
+                "job_id": job_id,
                 "url": url,
-                "report_url": f"https://hybrid-analysis.com/submission/{result.get('job_id')}",
+                # Only expose a direct report link when a sample hash is known.
+                "report_url": f"https://hybrid-analysis.com/sample/{sha256}" if sha256 else None,
+                "message": "Analyse soumise. Le rapport sera disponible apres traitement." if not sha256 else None,
+                "sha256": sha256,
             }
         except Exception as e:
             return {"error": str(e), "source": "HybridAnalysis"}
@@ -489,7 +494,8 @@ class HybridAnalysisClient(APIClient):
                 "threat_level": result.get("threat_level", 0),
                 "type": result.get("type"),
                 "sha256": result.get("sha256"),
-                "report_url": f"https://hybrid-analysis.com/sample/{result.get('sha256')}" if result.get("sha256") else f"https://hybrid-analysis.com/sample/{job_id}",
+                "report_url": f"https://hybrid-analysis.com/sample/{result.get('sha256')}" if result.get("sha256") else None,
+                "message": "Analyse en cours ou echantillon indisponible" if not result.get("sha256") else None,
                 "full_report": result
             }
         except Exception as e:
@@ -506,13 +512,28 @@ class HybridAnalysisClient(APIClient):
         
         if submit_result.get("error"):
             return submit_result
+
+        import time
         
         job_id = submit_result.get("job_id")
         if not job_id:
-            return {"error": "No job_id returned from submission", "source": "HybridAnalysis"}
+            sha256 = submit_result.get("sha256")
+            if sha256:
+                # Some URL submissions return only a hash; poll overview for availability.
+                start_time = time.time()
+                while time.time() - start_time < timeout:
+                    report = self.get_report(sha256)
+                    if not report.get("error"):
+                        report["state"] = "submitted"
+                        return report
+                    time.sleep(2)
+            return {
+                "source": "HybridAnalysis",
+                "status": "SUBMITTED",
+                "message": "Analyse soumise, rapport non encore disponible",
+            }
         
         # Poll for result
-        import time
         start_time = time.time()
         while time.time() - start_time < timeout:
             result = self.get_quick_scan_result(job_id)
@@ -523,6 +544,13 @@ class HybridAnalysisClient(APIClient):
             # Check if analysis is complete
             state = result.get("state", "")
             if state not in ["running", "pending"]:
+                sha256 = result.get("sha256")
+                if sha256:
+                    report = self.get_report(sha256)
+                    if not report.get("error"):
+                        report["job_id"] = job_id
+                        report["state"] = state
+                        return report
                 return result
             
             time.sleep(2)  # Wait 2 seconds before retrying
