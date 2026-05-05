@@ -105,6 +105,8 @@ def analyze_attachment():
 @app.route('/api/analyze/attachment/hash', methods=['POST'])
 def analyze_attachment_hash():
     """Analyse une pièce jointe à partir d'un hash déjà connu."""
+    from config import VIRUSTOTAL_API_KEY, HYBRID_ANALYSIS_API_KEY, HYBRID_ANALYSIS_ENABLED
+    
     data = request.get_json(silent=True) or {}
     file_hash = (data.get('file_hash') or data.get('hash') or '').strip()
 
@@ -114,9 +116,13 @@ def analyze_attachment_hash():
     try:
         hash_type = 'sha256' if len(file_hash) == 64 else ('sha1' if len(file_hash) == 40 else ('md5' if len(file_hash) == 32 else 'hash'))
 
+        # Vérifier disponibilité des APIs
+        vt_available = bool(VIRUSTOTAL_API_KEY)
+        ha_available = HYBRID_ANALYSIS_ENABLED and bool(HYBRID_ANALYSIS_API_KEY)
+
         vt_result = analyzer.vt_client.check_file_hash(file_hash)
         ha_result = {}
-        if hash_type == 'sha256' and analyzer.hybrid_analysis_client.enabled:
+        if hash_type == 'sha256' and ha_available:
             ha_result = analyzer.hybrid_analysis_client.get_report(file_hash)
 
         result = {
@@ -125,9 +131,15 @@ def analyze_attachment_hash():
             'hash_type': hash_type,
             'virustotal': vt_result,
             'hybrid_analysis': ha_result,
+            'api_status': {
+                'virustotal_available': vt_available,
+                'hybrid_analysis_available': ha_available
+            }
         }
 
-        analyzer.db.save_file_hash_analysis(file_hash, hash_type, vt_result)
+        # Ne sauvegarder que si pas d'erreur de configuration
+        if vt_result and not vt_result.get('error'):
+            analyzer.db.save_file_hash_analysis(file_hash, hash_type, vt_result)
         if ha_result and not ha_result.get('error'):
             analyzer.db.save_file_hash_analysis(file_hash, 'hybrid_analysis', ha_result)
 

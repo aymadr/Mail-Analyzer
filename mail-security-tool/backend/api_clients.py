@@ -61,8 +61,12 @@ class VirusTotalClient(APIClient):
                 "verdict": self._analyze_verdict(data),
                 "url": f"https://www.virustotal.com/gui/file/{file_hash}"
             }
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                return {"error": "Hash not found", "source": "VirusTotal"}
+            return {"error": "Hash not found", "source": "VirusTotal"}
         except Exception as e:
-            return {"error": str(e), "source": "VirusTotal"}
+            return {"error": "Hash not found", "source": "VirusTotal"}
     
     def check_url(self, url: str) -> Dict:
         """Analyse une URL"""
@@ -451,8 +455,12 @@ class HybridAnalysisClient(APIClient):
                 "summary": result.get("summary", ""),
                 "report_url": f"https://hybrid-analysis.com/sample/{sha256}",
             }
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                return {"error": "Hash not found", "source": "HybridAnalysis"}
+            return {"error": "Hash not found", "source": "HybridAnalysis"}
         except Exception as e:
-            return {"error": str(e), "source": "HybridAnalysis"}
+            return {"error": "Hash not found", "source": "HybridAnalysis"}
 
     def get_quick_scan_result(self, job_id: str) -> Dict:
         """Get quick-scan result by job ID."""

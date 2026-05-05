@@ -638,6 +638,7 @@ function renderAttachmentResult(data) {
     const f = data.file || {};
     const vt = data.virustotal || {};
     const ha = data.hybrid_analysis || {};
+    const apiStatus = data.api_status || {};
 
     if (mode === 'hash') {
         const inputHash = data.input_hash || data.hash || 'N/A';
@@ -654,13 +655,29 @@ function renderAttachmentResult(data) {
             </div>
         `;
 
+        // Afficher les messages d'alerte pour les APIs non configurées
+        if (!apiStatus.virustotal_available) {
+            showToast('warning', 'VirusTotal non configuré', 'La clé API VirusTotal n\'est pas définie. Configurez-la pour activer cette vérification.');
+        }
+        if (!apiStatus.hybrid_analysis_available) {
+            showToast('warning', 'Hybrid Analysis non configuré', 'La clé API Hybrid Analysis n\'est pas définie. Configurez-la pour activer cette vérification.');
+        }
+
         if (vt) {
             html += `<div class="result-card">
                 <div class="result-header"><i class="fa-solid fa-bug"></i> Vérification VirusTotal</div>
                 <div class="result-body">`;
 
             if (vt.error) {
-                html += `<div class="api-error-box">${vt.error}</div>`;
+                // Si API non disponible, afficher un message spécifique
+                if (!apiStatus.virustotal_available) {
+                    html += `<div style="padding:15px; background-color:rgba(255,193,7,0.1); border:1px solid var(--warning); border-radius:var(--radius); color:var(--warning);">
+                        <strong><i class="fa-solid fa-exclamation-triangle"></i> API non configurée</strong>
+                        <p style="margin-top:8px; font-size:0.9em;">Clé API VirusTotal manquante ou invalide. Cette vérification n'a pas pu être exécutée.</p>
+                    </div>`;
+                } else {
+                    html += `<div class="api-error-box">${vt.error}</div>`;
+                }
             } else {
                 html += `
                     <div style="margin-bottom:10px;">
@@ -680,7 +697,15 @@ function renderAttachmentResult(data) {
                     <div class="stat-item">`;
 
             if (ha.error) {
-                html += `<div class="api-error-box">${ha.error}</div>`;
+                // Si API non disponible, afficher un message spécifique
+                if (!apiStatus.hybrid_analysis_available) {
+                    html += `<div style="padding:15px; background-color:rgba(255,193,7,0.1); border:1px solid var(--warning); border-radius:var(--radius); color:var(--warning);">
+                        <strong><i class="fa-solid fa-exclamation-triangle"></i> API non configurée</strong>
+                        <p style="margin-top:8px; font-size:0.9em;">Clé API Hybrid Analysis manquante ou invalide. Cette vérification n'a pas pu être exécutée.</p>
+                    </div>`;
+                } else {
+                    html += `<div class="api-error-box">${ha.error}</div>`;
+                }
             } else {
                 html += `
                     <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
@@ -697,7 +722,10 @@ function renderAttachmentResult(data) {
         }
 
         el.innerHTML = html;
-        showToast('success', 'Hash analysé', 'Les APIs ont répondu à partir du hash collé.');
+        const toastMsg = (!apiStatus.virustotal_available || !apiStatus.hybrid_analysis_available) 
+            ? 'Hash analysé (certaines APIs non configurées)'
+            : 'Hash analysé';
+        showToast('success', toastMsg, 'Vérification complétée.');
         return;
     }
     
@@ -734,6 +762,18 @@ function renderAttachmentResult(data) {
         </div>
     `;
 
+    // Afficher les avertissements si les APIs ne sont pas configurées
+    if (!apiStatus.virustotal_available || !apiStatus.hybrid_analysis_available) {
+        let warnings = [];
+        if (!apiStatus.virustotal_available) warnings.push('VirusTotal');
+        if (!apiStatus.hybrid_analysis_available) warnings.push('Hybrid Analysis');
+        
+        html += `<div style="padding:15px; background-color:rgba(255,193,7,0.1); border:1px solid var(--warning); border-radius:var(--radius); color:var(--warning); margin-bottom:15px;">
+            <strong><i class="fa-solid fa-exclamation-triangle"></i> APIs non configurées</strong>
+            <p style="margin-top:8px; font-size:0.9em;">${warnings.join(', ')} ne sont pas configurés. Les vérifications correspondantes ne seront pas exécutées.</p>
+        </div>`;
+    }
+
     const vtHashes = [
         { type: 'sha256', label: 'SHA256', value: f.sha256 },
         { type: 'sha1', label: 'SHA1', value: f.sha1 },
@@ -754,7 +794,14 @@ function renderAttachmentResult(data) {
                 </div>`;
 
             if (result.error) {
-                html += `<div class="api-error-box">${result.error}</div>`;
+                if (!apiStatus.virustotal_available) {
+                    html += `<div style="padding:12px; background-color:rgba(255,193,7,0.1); border:1px solid var(--warning); border-radius:var(--radius); color:var(--warning); font-size:0.9em;">
+                        <strong><i class="fa-solid fa-exclamation-circle"></i> API non configurée</strong>
+                        <p style="margin-top:6px;">Clé API VirusTotal manquante ou invalide. Cette vérification n'a pas pu être exécutée.</p>
+                    </div>`;
+                } else {
+                    html += `<div class="api-error-box">${result.error}</div>`;
+                }
             } else {
                 html += `
                     <div style="margin-bottom:10px;">
@@ -780,25 +827,44 @@ function renderAttachmentResult(data) {
     if (data.hybrid_analysis) {
         const ha = data.hybrid_analysis || {};
         const haStatus = (ha.state || ha.verdict || (ha.error ? 'ERROR' : 'UNKNOWN')).toUpperCase();
-        html += `<div class="result-card">
+        let haHtml = `<div class="result-card">
             <div class="result-header"><i class="fa-solid fa-flask-vial"></i> Hybrid Analysis Sandbox</div>
             <div class="result-body">
                 <div class="stat-item">
                     <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
                         <span class="badge ${ha.error ? 'badge-suspicious' : (ha.verdict ? 'badge-' + ha.verdict.toLowerCase() : 'badge-neutral')}">${haStatus}</span>
-                        ${ha.sha256 ? `<span class="text-muted text-sm mono" style="word-break:break-all;">${ha.sha256.substring(0, 16)}...</span>` : ''}
-                    </div>
-                    ${ha.error ? `<div class="api-error-box">${ha.error}</div>` : ''}
-                    ${ha.verdict ? `<div style="margin-top:8px;"><strong>Verdict:</strong> ${ha.verdict}</div>` : ''}
-                    ${ha.threat_level !== undefined ? `<div style="margin-top:8px;"><strong>Niveau de menace:</strong> ${ha.threat_level}</div>` : ''}
-                    ${ha.report_url ? `<div style="margin-top:10px;"><a href="${ha.report_url}" target="_blank" class="btn btn-primary" style="display:inline-block;"><i class="fa-solid fa-up-right-from-square"></i> Voir le rapport</a></div>` : ''}
-                </div>
+                        ${ha.sha256 ? '<span class="text-muted text-sm mono" style="word-break:break-all;">' + ha.sha256.substring(0, 16) + '...</span>' : ''}
+                    </div>`;
+        
+        if (ha.error) {
+            if (!apiStatus.hybrid_analysis_available) {
+                haHtml += '<div style="padding:12px; background-color:rgba(255,193,7,0.1); border:1px solid var(--warning); border-radius:var(--radius); color:var(--warning); font-size:0.9em;"><strong><i class="fa-solid fa-exclamation-circle"></i> API non configurée</strong><p style="margin-top:6px;">Clé API Hybrid Analysis manquante ou invalide. Cette vérification n\'a pas pu être exécutée.</p></div>';
+            } else {
+                haHtml += '<div class="api-error-box">' + ha.error + '</div>';
+            }
+        }
+        
+        if (ha.verdict) {
+            haHtml += '<div style="margin-top:8px;"><strong>Verdict:</strong> ' + ha.verdict + '</div>';
+        }
+        if (ha.threat_level !== undefined) {
+            haHtml += '<div style="margin-top:8px;"><strong>Niveau de menace:</strong> ' + ha.threat_level + '</div>';
+        }
+        if (ha.report_url) {
+            haHtml += '<div style="margin-top:10px;"><a href="' + ha.report_url + '" target="_blank" class="btn btn-primary" style="display:inline-block;"><i class="fa-solid fa-up-right-from-square"></i> Voir le rapport</a></div>';
+        }
+        
+        haHtml += `</div>
             </div>
         </div>`;
+        html += haHtml;
     }
 
     el.innerHTML = html;
-    showToast('success', 'Sandbox OK', 'Hashs calculés et analysés.');
+    const toastMsg = (!apiStatus.virustotal_available || !apiStatus.hybrid_analysis_available) 
+        ? 'Analyse complétée (certaines APIs non configurées)'
+        : 'Sandbox OK';
+    showToast('success', toastMsg, 'Hashes calculés et analysés.');
 }
 
 function renderUrlResult(data) {

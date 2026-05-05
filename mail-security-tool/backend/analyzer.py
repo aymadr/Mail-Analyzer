@@ -11,6 +11,7 @@ from email_parser import EmailHeaderParser
 from hash_calculator import HashCalculator
 from api_clients import VirusTotalClient, URLScanIOClient, AbuseIPDBClient, ScamdocClient, HybridAnalysisClient
 from database import Database
+from config import VIRUSTOTAL_API_KEY, HYBRID_ANALYSIS_API_KEY, HYBRID_ANALYSIS_ENABLED
 from typing import Dict, List
 
 class SecurityAnalyzer:
@@ -99,7 +100,11 @@ class SecurityAnalyzer:
         
         results = {
             "file": hashes,
-            "virustotal": {}
+            "virustotal": {},
+            "api_status": {
+                "virustotal_available": bool(VIRUSTOTAL_API_KEY),
+                "hybrid_analysis_available": HYBRID_ANALYSIS_ENABLED and bool(HYBRID_ANALYSIS_API_KEY)
+            }
         }
         
         # Utilise ThreadPoolExecutor pour appeler les APIs en parallèle
@@ -125,10 +130,11 @@ class SecurityAnalyzer:
                     if key.startswith('vt_'):
                         hash_type = key.split('_')[1]
                         results["virustotal"][hash_type] = result
-                        self.db.save_file_hash_analysis(hashes[hash_type], hash_type, result)
+                        if not result.get('error'):
+                            self.db.save_file_hash_analysis(hashes[hash_type], hash_type, result)
                     else:
                         results[key] = result
-                        if key == 'hybrid_analysis' and hashes.get("sha256"):
+                        if key == 'hybrid_analysis' and hashes.get("sha256") and not result.get('error'):
                             self.db.save_file_hash_analysis(hashes["sha256"], "hybrid_analysis", result)
                 except Exception as e:
                     results[key] = {"error": str(e)}
