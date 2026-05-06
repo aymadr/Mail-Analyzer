@@ -1,8 +1,9 @@
 /**
- * sec-ops Frontend Logic
+ * sec-ops Frontend Logic - Professional SOC Edition
+ * Optimized for performance, clean animations, and operational clarity
  */
 
-// Tab Configuration logic
+// Tab Configuration
 const tabConfig = {
     dashboard: { title: "Dashboard Sécurité", desc: "Bienvenue dans SecAnalyze - Choisissez une analyse pour commencer" },
     email: { title: "Inspecteur d'Email", desc: "Parse automatiquement les en-têtes SPF, DKIM, DMARC et analyse les IPs" },
@@ -12,6 +13,13 @@ const tabConfig = {
     text: { title: "Analyse de Texte", desc: "Détecte les patterns de phishing: formules, fautes, URLs suspectes" },
     history: { title: "Historique des Analyses", desc: "Archives des analyses enregistrées dans la DB locale avec filtres" }
 };
+
+// DOM Cache for performance
+const domCache = {};
+function getElement(id) {
+    if (!domCache[id]) domCache[id] = document.getElementById(id);
+    return domCache[id];
+}
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
@@ -36,33 +44,32 @@ function switchTab(tabName) {
     if(navItem) navItem.click();
 }
 
-// Navigation / Tabs
+// Navigation / Tabs - Optimized for SOC operations
 function initTabs() {
     const navItems = document.querySelectorAll('.nav-item');
     navItems.forEach(item => {
         item.addEventListener('click', () => {
             const target = item.dataset.tab;
             
-            // UI Active State
+            // Rapid state update
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             item.classList.add('active');
             
-            // Header Text update
-            document.getElementById('active-tab-title').innerHTML = tabConfig[target].title;
-            document.getElementById('active-tab-desc').innerHTML = tabConfig[target].desc;
+            // Update header immediately
+            getElement('active-tab-title').textContent = tabConfig[target].title;
+            getElement('active-tab-desc').textContent = tabConfig[target].desc;
             
-            // Hide all panels, show target
+            // Panel transition: clean fade
             document.querySelectorAll('.view-panel').forEach(p => {
                 p.classList.remove('active', 'fade-in');
                 p.classList.add('hidden');
             });
-            const targetPanel = document.getElementById(target);
+            const targetPanel = getElement(target);
             targetPanel.classList.remove('hidden');
-            // Trigger reflow for animation
-            void targetPanel.offsetWidth; 
+            void targetPanel.offsetWidth;
             targetPanel.classList.add('active', 'fade-in');
 
-            // Load history dynamically
+            // Load data if needed
             if(target === 'history') loadHistory();
             if(target === 'dashboard') loadDashboard();
         });
@@ -120,10 +127,10 @@ function initDragAndDrop(zoneId, inputId, labelId) {
 // ------------------------------------------------------------------
 
 // 1. Email Submit
-document.getElementById('emailForm').addEventListener('submit', async (e) => {
+getElement('emailForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const file = document.getElementById('emailFile').files[0];
-    if (!file) return showToast('error', 'Erreur', 'Veuillez sélectionner un fichier email.');
+    const file = getElement('emailFile').files[0];
+    if (!file) return showToast('error', 'Invalid Input', 'Select an email file.');
     
     const formData = new FormData();
     formData.append('file', file);
@@ -132,11 +139,13 @@ document.getElementById('emailForm').addEventListener('submit', async (e) => {
     try {
         const res = await fetch('/api/analyze/email', { method: 'POST', body: formData });
         const data = await res.json();
-        if (res.ok) renderEmailResult(data);
-        else throw new Error(data.error || 'Erreur serveur');
+        if (res.ok) {
+            renderEmailResult(data);
+            showToast('success', 'Email Analyzed', 'Analysis complete');
+        } else throw new Error(data.error || 'Server error');
     } catch (err) {
         showError('emailResult');
-        showToast('error', 'Échec de l\'analyse', err.message);
+        showToast('error', 'Analysis Failed', err.message);
     }
 });
 
@@ -154,12 +163,12 @@ if (attachmentHashBtn) {
 }
 
 async function submitAttachment(mode) {
-    const file = document.getElementById('attachmentFile').files[0];
-    const hashInput = document.getElementById('attachmentHashInput');
+    const file = getElement('attachmentFile').files[0];
+    const hashInput = getElement('attachmentHashInput');
     const attachmentHash = (hashInput?.value || '').trim();
 
     if (mode === 'analysis') {
-        if (!file) return showToast('error', 'Erreur', 'Veuillez sélectionner un fichier.');
+        if (!file) return showToast('error', 'Invalid Input', 'Select a file.');
 
         const formData = new FormData();
         formData.append('file', file);
@@ -168,17 +177,19 @@ async function submitAttachment(mode) {
         try {
             const res = await fetch('/api/analyze/attachment', { method: 'POST', body: formData });
             const data = await res.json();
-            if (res.ok) renderAttachmentResult(data);
-            else throw new Error(data.error || 'Erreur serveur');
+            if (res.ok) {
+                renderAttachmentResult(data);
+                showToast('success', 'File Analyzed', 'Hash computed & verified');
+            } else throw new Error(data.error || 'Server error');
         } catch (err) {
             showError('attachmentResult');
-            showToast('error', 'Échec de l\'analyse', err.message);
+            showToast('error', 'Analysis Failed', err.message);
         }
         return;
     }
 
     if (!attachmentHash) {
-        return showToast('error', 'Erreur', 'Colle un hash dans la barre dédiée.');
+        return showToast('error', 'Invalid Input', 'Paste a hash value.');
     }
 
     showLoader('attachmentResult');
@@ -189,18 +200,22 @@ async function submitAttachment(mode) {
             body: JSON.stringify({ file_hash: attachmentHash })
         });
         const data = await res.json();
-        if (res.ok) renderAttachmentResult(data);
-        else throw new Error(data.error || 'Erreur serveur');
+        if (res.ok) {
+            renderAttachmentResult(data);
+            showToast('success', 'Hash Verified', 'Reputation checked');
+        } else throw new Error(data.error || 'Server error');
     } catch (err) {
         showError('attachmentResult');
-        showToast('error', 'Échec de l\'analyse', err.message);
+        showToast('error', 'Analysis Failed', err.message);
     }
 }
 
-// 3. URL Submit
-document.getElementById('urlForm').addEventListener('submit', async (e) => {
+// URL & IP Analysis - Optimized
+getElement('urlForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const url = document.getElementById('urlInput').value;
+    const url = getElement('urlInput').value.trim();
+    
+    if (!url) return showToast('error', 'Invalid Input', 'Enter a URL.');
     
     showLoader('urlResult');
     try {
@@ -210,18 +225,21 @@ document.getElementById('urlForm').addEventListener('submit', async (e) => {
             body: JSON.stringify({ url })
         });
         const data = await res.json();
-        if (res.ok) renderUrlResult(data);
-        else throw new Error(data.error || 'Erreur serveur');
+        if (res.ok) {
+            renderUrlResult(data);
+            showToast('success', 'URL Scanned', 'Reputation loaded');
+        } else throw new Error(data.error || 'Server error');
     } catch (err) {
         showError('urlResult');
-        showToast('error', 'Échec de l\'analyse', err.message);
+        showToast('error', 'Scan Failed', err.message);
     }
 });
 
-// 4. IP Submit
-document.getElementById('ipForm').addEventListener('submit', async (e) => {
+getElement('ipForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const ip = document.getElementById('ipInput').value;
+    const ip = getElement('ipInput').value.trim();
+    
+    if (!ip) return showToast('error', 'Invalid Input', 'Enter an IP address.');
     
     showLoader('ipResult');
     try {
@@ -231,58 +249,61 @@ document.getElementById('ipForm').addEventListener('submit', async (e) => {
             body: JSON.stringify({ ip })
         });
         const data = await res.json();
-        if (res.ok) renderIpResult(data);
-        else throw new Error(data.error || 'Erreur serveur');
+        if (res.ok) {
+            renderIpResult(data);
+            showToast('success', 'IP Analyzed', 'Threat intel loaded');
+        } else throw new Error(data.error || 'Server error');
     } catch (err) {
         showError('ipResult');
-        showToast('error', 'Échec de l\'analyse', err.message);
+        showToast('error', 'Analysis Failed', err.message);
     }
 });
 
-// 5. History
+// 5. History Loading - Optimized
 async function loadHistory() {
-    const list = document.getElementById('historyList');
-    list.innerHTML = '<div class="loader-container"><div class="spinner"></div><p>Chargement des logs...</p></div>';
+    const list = getElement('historyList');
+    list.innerHTML = '<div class="loader-container"><div class="spinner"></div><p style="color: var(--primary); font-family: var(--font-mono); font-size: 0.85rem; margin:16px 0 0 0;">LOADING</p></div>';
     try {
         const res = await fetch('/api/history');
         const data = await res.json();
         
         if (data.length === 0) {
-            list.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-muted);"><i class="fa-solid fa-ghost text-4xl mb-4"></i><p>Aucune analyse en base de données.</p></div>';
+            list.innerHTML = '<div style="text-align:center; padding: 60px 20px; color: var(--text-muted);"><i class="fa-solid fa-inbox" style="font-size:2.5rem; margin-bottom:16px; display:block; opacity:0.5;"></i><p style="margin:0; font-size:0.95rem;">No analysis history</p></div>';
             return;
         }
 
         const typeMeta = {
             email: { icon: 'fa-envelope', label: 'Email' },
-            attachment: { icon: 'fa-file-shield', label: 'Pièce jointe' },
+            attachment: { icon: 'fa-file-shield', label: 'File' },
             ip: { icon: 'fa-network-wired', label: 'IP' },
             url: { icon: 'fa-link', label: 'URL' }
         };
 
         let html = '';
         data.forEach(item => {
-            const meta = typeMeta[item.type] || { icon: 'fa-circle-info', label: item.type || 'Analyse' };
-            const dateStr = new Date(item.date).toLocaleString('fr-FR');
+            const meta = typeMeta[item.type] || { icon: 'fa-circle-info', label: item.type || 'Analysis' };
+            const date = new Date(item.date);
+            const dateStr = date.toLocaleDateString('en-US') + ' ' + date.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
             html += `
                 <div class="history-item">
                     <div class="h-info">
-                        <h4><i class="fa-solid ${meta.icon} mr-2"></i>${meta.label} - ${item.title || 'Sans titre'}</h4>
-                        <p>${item.detail || 'Aucun détail'}</p>
+                        <h4 style="margin:0 0 6px 0; font-size:0.95rem; font-weight:600;"><i class="fa-solid ${meta.icon}" style="margin-right:8px; color:var(--primary);"></i>${meta.label} - ${item.title || 'Untitled'}</h4>
+                        <p style="margin:0; font-size:0.8rem; color:var(--text-muted);">${item.detail || 'No details'}</p>
                     </div>
-                    <div class="h-date">${dateStr}</div>
+                    <div class="h-date" style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap;">${dateStr}</div>
                 </div>
             `;
         });
         list.innerHTML = html;
     } catch (error) {
-        list.innerHTML = `<div class="api-error-box"><i class="fa-solid fa-triangle-exclamation"></i> Impossible de charger l'historique</div>`;
+        list.innerHTML = `<div style="padding:40px; text-align:center; color:var(--danger);"><i class="fa-solid fa-exclamation-circle" style="font-size:2rem; margin-bottom:12px; display:block;"></i><p style="margin:0; font-size:0.9rem;">Failed to load history</p></div>`;
     }
 }
 
-// 6. Dashboard
+// 6. Dashboard - Professional Operations View
 async function loadDashboard() {
-    const panel = document.getElementById('dashboardSummary');
-    panel.innerHTML = '<div class="loader-container"><div class="spinner"></div><p>Chargement du rapport...</p></div>';
+    const panel = getElement('dashboardSummary');
+    panel.innerHTML = '<div class="loader-container"><div class="spinner"></div><p style="color: var(--primary); font-family: var(--font-mono); font-size: 0.85rem; margin:16px 0 0 0;">LOADING STATISTICS</p></div>';
 
     try {
         const res = await fetch('/api/dashboard');
@@ -295,38 +316,56 @@ async function loadDashboard() {
         let html = `
             <div class="result-body">
                 <div class="stats-grid">
-                    <div class="stat-item"><span class="stat-label">EMAILS ANALYSÉS</span><span class="stat-value">${totals.emails || 0}</span></div>
-                    <div class="stat-item"><span class="stat-label">PIÈCES JOINTES</span><span class="stat-value">${totals.attachments || 0}</span></div>
-                    <div class="stat-item"><span class="stat-label">IPS ANALYSÉES</span><span class="stat-value">${totals.ips || 0}</span></div>
-                    <div class="stat-item"><span class="stat-label">URLS ANALYSÉES</span><span class="stat-value">${totals.urls || 0}</span></div>
-                </div>
-                <div class="stat-item" style="margin-top:12px;">
-                    <span class="stat-label">DERNIER EMAIL ANALYSÉ</span>
-                    <div class="stat-value">${latest.sender || 'N/A'}</div>
-                    <div style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">${latest.subject || 'N/A'}</div>
+                    <div class="stat-item"><span class="stat-label">EMAILS ANALYZED</span><span class="stat-value" style="font-size:1.6rem;">${totals.emails || 0}</span></div>
+                    <div class="stat-item"><span class="stat-label">FILES SCANNED</span><span class="stat-value" style="font-size:1.6rem;">${totals.attachments || 0}</span></div>
+                    <div class="stat-item"><span class="stat-label">IPS ANALYZED</span><span class="stat-value" style="font-size:1.6rem;">${totals.ips || 0}</span></div>
+                    <div class="stat-item"><span class="stat-label">URLS VERIFIED</span><span class="stat-value" style="font-size:1.6rem;">${totals.urls || 0}</span></div>
                 </div>
             </div>
         `;
 
+        if (latest.sender || latest.subject) {
+            html += `
+                <div class="result-card" style="margin-top:20px;">
+                    <div class="result-header"><i class="fa-solid fa-envelope"></i> Last Email</div>
+                    <div class="result-body">
+                        <div class="stat-item">
+                            <span class="stat-label">FROM</span>
+                            <span class="stat-value" style="font-size:0.95rem; word-break:break-all;">${latest.sender || 'Unknown'}</span>
+                        </div>
+                        <div class="stat-item" style="margin-top:12px;">
+                            <span class="stat-label">SUBJECT</span>
+                            <span class="stat-value" style="font-size:0.95rem; word-break:break-all;">${latest.subject || 'No Subject'}</span>
+                        </div>
+                        <div class="stat-item" style="margin-top:12px;">
+                            <span class="stat-label">DATE</span>
+                            <span class="stat-value" style="font-size:0.9rem; color:var(--text-muted);">${latest.date ? new Date(latest.date).toLocaleString() : 'N/A'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         if (recent.length > 0) {
-            html += '<div class="history-header"><h3><i class="fa-solid fa-clock"></i> Activité récente</h3></div>';
+            html += '<div style="margin-top:20px;"><h3 style="margin:0 0 12px 0; font-size:0.95rem; color:var(--primary); font-weight:600; text-transform:uppercase; letter-spacing:1px;">Recent Activity</h3>';
             recent.forEach(item => {
-                const dateStr = new Date(item.date).toLocaleString('fr-FR');
+                const dateStr = new Date(item.date).toLocaleString();
                 html += `
                     <div class="history-item">
                         <div class="h-info">
-                            <h4><i class="fa-solid fa-envelope mr-2"></i>${item.sender || 'Sender Inconnu'}</h4>
-                            <p>${item.subject || 'Sans Sujet'}</p>
+                            <h4 style="margin:0 0 4px 0; font-size:0.9rem;"><i class="fa-solid fa-envelope" style="margin-right:8px; color:var(--primary);"></i>${item.sender || 'Unknown'}</h4>
+                            <p style="margin:0; font-size:0.8rem; color:var(--text-muted);">${item.subject || 'No Subject'}</p>
                         </div>
-                        <div class="h-date">${dateStr}</div>
+                        <div class="h-date" style="font-size:0.75rem;">${dateStr}</div>
                     </div>
                 `;
             });
+            html += '</div>';
         }
 
         panel.innerHTML = html;
     } catch (err) {
-        panel.innerHTML = '<div class="api-error-box"><i class="fa-solid fa-triangle-exclamation"></i> Impossible de charger le dashboard</div>';
+        panel.innerHTML = '<div style="padding:48px 32px; text-align:center; color:var(--danger);"><i class="fa-solid fa-exclamation-circle" style="font-size:2rem; margin-bottom:12px; display:block;"></i><p style="margin:0; font-size:0.9rem;">Failed to load dashboard</p></div>';
     }
 }
 
@@ -1068,47 +1107,51 @@ function renderIpResult(data) {
 // HELPER FUNCTIONS
 // ------------------------------------------------------------------
 
+// UI Feedback - SOC Professional Style
 function showLoader(containerId) {
-    document.getElementById(containerId).innerHTML = `
+    getElement(containerId).innerHTML = `
         <div class="loader-container">
             <div class="spinner"></div>
-            <p style="color: var(--primary); font-family: var(--font-mono); font-size: 0.9rem;">[ EN COURS D'ANALYSE... ]</p>
+            <p style="color: var(--primary); font-family: var(--font-mono); font-size: 0.85rem; letter-spacing:1px; margin:16px 0 0 0;">ANALYZING</p>
         </div>
     `;
 }
 
 function showError(containerId) {
-    document.getElementById(containerId).innerHTML = `
-        <div style="padding:40px; text-align:center; color: var(--danger);">
-            <i class="fa-solid fa-triangle-exclamation text-4xl mb-4"></i>
-            <p>Une erreur critique est survenue lors de l'analyse.</p>
+    getElement(containerId).innerHTML = `
+        <div style="padding:48px 32px; text-align:center; color: var(--danger);">
+            <i class="fa-solid fa-triangle-exclamation" style="font-size:2.5rem; margin-bottom:16px; display:block;"></i>
+            <p style="font-size:0.95rem; margin:0; font-weight:500;">Analysis Failed</p>
+            <p style="font-size:0.8rem; color:var(--text-muted); margin:8px 0 0 0;">Please check your input and try again</p>
         </div>
     `;
 }
 
 function showToast(type, title, msg) {
-    const container = document.getElementById('toast-container');
+    const container = getElement('toast-container');
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     
-    let icon = 'fa-circle-info';
-    if(type === 'success') icon = 'fa-circle-check';
-    if(type === 'error') icon = 'fa-shield-virus';
+    const icons = { success: 'fa-circle-check', error: 'fa-shield-virus', info: 'fa-circle-info' };
+    const icon = icons[type] || icons.info;
     
     toast.innerHTML = `
         <div class="toast-icon"><i class="fa-solid ${icon}"></i></div>
         <div class="toast-content">
-            <h4>${title}</h4>
-            <p>${msg}</p>
+            <h4 style="margin:0; font-size:0.9rem; font-weight:600;">${title}</h4>
+            <p style="margin:4px 0 0 0; font-size:0.8rem; opacity:0.9;">${msg}</p>
         </div>
     `;
     
     container.appendChild(toast);
     
-    setTimeout(() => {
-        toast.style.animation = 'fadeOutRight 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards';
-        setTimeout(() => toast.remove(), 300);
-    }, 4000);
+    const hideTimer = setTimeout(() => {
+        toast.style.animation = 'fadeOut 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards';
+        setTimeout(() => toast.remove(), 250);
+    }, 3500);
+    
+    // Cancel auto-hide on hover
+    toast.addEventListener('mouseenter', () => clearTimeout(hideTimer));
 }
 
 function formatBytes(bytes) {
@@ -1295,6 +1338,15 @@ function selectHistoryFilter(value) {
     menu.style.display = 'none';
     
     loadHistory();
+}
+
+// Debounce utility for input optimization
+function debounce(func, delay) {
+    let timeoutId;
+    return function(...args) {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => func(...args), delay);
+    };
 }
 
 // Close dropdown when clicking outside
