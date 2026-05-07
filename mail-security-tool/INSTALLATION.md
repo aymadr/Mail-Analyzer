@@ -22,29 +22,14 @@ cd mail-security-tool
 pip install -r requirements.txt
 
 # 4. Configurer les clés API
-# Éditer le fichier .env avec tes clés VirusTotal, URLScan, AbuseIPDB, Scamdoc
-# 4. Configurer les clés API
-# Éditer le fichier .env avec tes clés API VirusTotal, URLScan, AbuseIPDB, Scamdoc, MXToolbox
+# Éditer le fichier .env avec tes clés API (VirusTotal, URLScan, AbuseIPDB, Scamdoc, MXToolbox, Hybrid Analysis)
+
+# 5. Lancer
 python run.py
 ```
 
 **Méthode 1C - Via CMD (Invite de commande)**
 ```batch
-
-### 5. MXToolbox
-1. Aller sur https://mxtoolbox.com/c/products/mxtoolboxapi
-2. Créer un compte / récupérer ta clé API
-3. Ajouter la clé dans le fichier `.env`
-
-```env
-MXTOOLBOX_ENABLED=true
-MXTOOLBOX_API_KEY=b35650cd-e23b-48e5-a5cb-f8584cbdb2c2
-MXTOOLBOX_BASE_URL=https://mxtoolbox.com/api/v1
-```
-
-**Notes:**
-- La clé MXToolbox se passe dans le header `Authorization` sans préfixe `Bearer`
-- Les lookups `dns`, `mx`, `spf`, `dmarc`, `blacklist`, `ptr`, `http` et `https` sont utilisés par l'application
 REM 1. Aller au dossier
 cd mail-security-tool
 
@@ -171,6 +156,30 @@ ABUSEIPDB_API_KEY=YOUR_API_KEY_HERE
 SCAMDOC_API_KEY=YOUR_API_KEY_HERE
 ```
 
+### 5. MXToolbox
+1. Aller sur https://rapidapi.com/ et rechercher "MXToolbox"
+2. S'abonner au plan souhaité
+3. Récupérer la clé RapidAPI
+
+```env
+MXTOOLBOX_ENABLED=true
+MXTOOLBOX_API_KEY=YOUR_API_KEY_HERE
+MXTOOLBOX_BASE_URL=https://mxtoolbox.com/api/v1
+```
+
+### 6. Hybrid Analysis
+1. Aller sur https://hybrid-analysis.com/
+2. Créer un compte et générer une clé API
+3. Ajouter les variables dans `.env`
+
+```env
+HYBRID_ANALYSIS_ENABLED=true
+HYBRID_ANALYSIS_API_KEY=YOUR_API_KEY_HERE
+HYBRID_ANALYSIS_BASE_URL=https://hybrid-analysis.com/api/v2
+HYBRID_ANALYSIS_USER_AGENT=Falcon
+HYBRID_ANALYSIS_MAX_FILESIZE_MB=30
+```
+
 
 ## 📊 Architecture Modulaire
 
@@ -211,7 +220,7 @@ print(hashes['sha256'])
 ```
 
 #### 4. `api_clients.py`
-- Clients pour VirusTotal, URLScan.io, AbuseIPDB
+- Clients pour VirusTotal, URLScan.io, AbuseIPDB, Scamdoc, MXToolbox et Hybrid Analysis
 - Gestion des retries et erreurs
 
 ```python
@@ -258,19 +267,19 @@ url_analysis = analyzer.analyze_url("https://example.com")
 1. **Email** - Analyser un fichier email
    - Parse automatique SPF/DKIM/DMARC
    - Extraction et analyse des IPs
-   - Qui se coupe avec des vérifications sur VirusTotal et ScamDoc
+    - Vérifications via VirusTotal, AbuseIPDB, Scamdoc et MXToolbox
 
 2. **Pièce Jointe** - Analyser les fichiers suspects
    - Calcul automatique des hash
-   - Vérification VirusTotal
+    - Vérification VirusTotal (+ Hybrid Analysis optionnel)
 
 3. **URL** - Analyser les URLs suspectes
    - Scan URLScan.io
-   - Vérification VirusTotal et ScamDoc
+    - Vérification VirusTotal, Scamdoc, MXToolbox DNS (+ Hybrid Analysis optionnel)
 
 4. **IP** - Analyser les adresses IP
-   - VirusTotal et ScamDoc check
-   - AbuseIPDB reputation
+    - VirusTotal et AbuseIPDB
+    - MXToolbox PTR/RBL
 
 5. **Historique** - Voir les analyses précédentes
    - Accès rapide aux rapports
@@ -303,7 +312,7 @@ CREATE TABLE file_hashes (
 CREATE TABLE ip_analysis (
     id INTEGER PRIMARY KEY,
     ip_address TEXT UNIQUE,
-    analysis_data TEXT,  -- JSON (VT + AbuseIPDB)
+    analysis_data TEXT,  -- JSON (VT + AbuseIPDB + MXToolbox)
     created_at TIMESTAMP,
     updated_at TIMESTAMP
 );
@@ -312,7 +321,7 @@ CREATE TABLE ip_analysis (
 CREATE TABLE url_analysis (
     id INTEGER PRIMARY KEY,
     url TEXT UNIQUE,
-    analysis_data TEXT,  -- JSON (VT + URLScan)
+    analysis_data TEXT,  -- JSON (VT + URLScan + Scamdoc + MXToolbox + Hybrid Analysis)
     created_at TIMESTAMP,
     updated_at TIMESTAMP
 );
@@ -334,7 +343,10 @@ Email Reçu
 [API Clients]
     ├─ VirusTotal Check
     ├─ URLScan.io Scan
-    └─ AbuseIPDB Check
+    ├─ AbuseIPDB Check
+    ├─ Scamdoc Check
+    ├─ MXToolbox DNS/PTR/RBL
+    └─ Hybrid Analysis (optionnel)
     ↓
 [Database]
     └─ Cache les résultats

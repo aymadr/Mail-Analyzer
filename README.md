@@ -1,6 +1,6 @@
 # Mail Security Analyzer 🔒
 
-Outil d'analyse de sécurité email centralisé intégrant VirusTotal, URLScan.io, AbuseIPDB, Scamdoc (ScamPredictor via RapidAPI) et Any.Run pour l'analyse dynamique optionnelle des pièces jointes.
+Outil d'analyse de sécurité email centralisé intégrant VirusTotal, URLScan.io, AbuseIPDB, Scamdoc (ScamPredictor via RapidAPI), MXToolbox et Hybrid Analysis pour l'analyse dynamique optionnelle.
 
 ## Aperçu
 
@@ -44,10 +44,11 @@ Outil d'analyse de sécurité email centralisé intégrant VirusTotal, URLScan.i
 - ✅ **Extraction d'informations** : IPs, domaines, en-têtes
 - ✅ **Calcul de hash** : MD5, SHA1, SHA256
 - ✅ **Analyse de pièces jointes** : Vérification VirusTotal
-- ✅ **Analyse d'URLs** : Vérification VirusTotal + URLScan.io + Scamdoc
-- ✅ **Analyse d'IPs** : VirusTotal + AbuseIPDB
+- ✅ **Analyse d'URLs** : Vérification VirusTotal + URLScan.io + Scamdoc + MXToolbox
+- ✅ **Analyse d'IPs** : VirusTotal + AbuseIPDB + MXToolbox (PTR/RBL)
 - ✅ **Scoring Scamdoc** : Trust Score et Risk Score pour domaines/URLs
-- ✅ **Analyse dynamique** : Any.Run optionnel pour les pièces jointes
+- ✅ **Analyse DNS** : MX/SPF/DKIM/DMARC via MXToolbox
+- ✅ **Analyse dynamique** : Hybrid Analysis optionnel (fichiers et URLs)
 - ✅ **Base de données** : Cache local SQLite
 - ✅ **Interface web** : Dashboard moderne et intuitif
 
@@ -59,7 +60,7 @@ mail-security-tool/
 │   ├── config.py              # Configuration centralisée
 │   ├── email_parser.py        # Parser d'entête email
 │   ├── hash_calculator.py     # Calcul de hash
-│   ├── api_clients.py         # Clients API (VT, URLScan, AbuseIPDB, Scamdoc, Any.Run)
+│   ├── api_clients.py         # Clients API (VT, URLScan, AbuseIPDB, Scamdoc, MXToolbox, Hybrid Analysis)
 │   ├── database.py            # Gestion SQLite
 │   └── analyzer.py            # Orchestrateur principal
 ├── frontend/
@@ -138,14 +139,15 @@ docker compose up --build -d
 
 5. **Configurer les clés API**
    - Éditer le fichier `.env`
-   - Ajouter tes clés API VirusTotal, URLScan.io, AbuseIPDB, Scamdoc (RapidAPI) et Any.Run si tu actives l'analyse dynamique
+   - Ajouter tes clés API VirusTotal, URLScan.io, AbuseIPDB, Scamdoc (RapidAPI), MXToolbox (RapidAPI) et Hybrid Analysis
 
    **Obtenir les clés API :**
    - [VirusTotal](https://www.virustotal.com/gui/home/upload)
    - [URLScan.io](https://urlscan.io/)
    - [AbuseIPDB](https://www.abuseipdb.com/)
    - [ScamPredictor (RapidAPI)](https://rapidapi.com/)
-   - [Any.Run](https://any.run/) si tu disposes d'un accès API
+   - [MXToolbox (RapidAPI)](https://rapidapi.com/)
+   - [Hybrid Analysis](https://hybrid-analysis.com/)
 
 6. **Lancer l'application**
    ```powershell
@@ -196,17 +198,17 @@ Note: ce n'est pas un traceroute réseau en direct. L'analyse est basée sur les
 - Charger le fichier suspect
 - Calcule: MD5, SHA1, SHA256
 - Vérifie les hash sur VirusTotal
-- Soumet optionnellement l'échantillon à Any.Run si activé dans `.env`
+- Soumet optionnellement l'échantillon à Hybrid Analysis si activé dans `.env`
 - Affiche le verdict (Malveillant/Suspect/Propre)
 
 ### 3. Analyse d'URL
 - Entrer une URL
-- Analyse via VirusTotal, URLScan.io et Scamdoc
+- Analyse via VirusTotal, URLScan.io, Scamdoc, Hybrid Analysis (optionnel) et MXToolbox (DNS)
 - Affiche le verdict et les détails (dont Trust Score et Risk Score Scamdoc)
 
 ### 4. Analyse d'IP
 - Entrer une adresse IP
-- Vérifie sur VirusTotal et AbuseIPDB
+- Vérifie sur VirusTotal, AbuseIPDB et MXToolbox (PTR/RBL)
 - Affiche pays, ASN, score de confiance abus
 
 ## 🔧 Configuration Avancée
@@ -288,7 +290,7 @@ GET /api/report/<email_hash>
 - ✅ Limite de taille (50MB)
 - ✅ Validation des IPs/URLs
 - ✅ CORS à configurer si nécessaire
-- ✅ Any.Run désactivable par variable d'environnement
+- ✅ Hybrid Analysis désactivable par variable d'environnement
 
 ## 🐛 Troubleshooting
 
