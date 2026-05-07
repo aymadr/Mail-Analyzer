@@ -696,6 +696,7 @@ class EmailHeaderParser:
         content = self._normalize_header_text(content)
         status = "Not found"
         domain = None
+        selector = None
         
         # On vérifie Authentication-Results pour un statut DKIM (ex: dkim=pass)
         auth_results_match = re.search(r"Authentication-Results:.*?dkim=([a-zA-Z]+)", content, re.IGNORECASE | re.DOTALL)
@@ -714,12 +715,21 @@ class EmailHeaderParser:
             
         if match:
             domain = self._extract_dkim_domain(match.group(1))
+            selector = self._extract_dkim_selector(match.group(1))
             
         return {
             "status": status,
             "domain": domain,
-            "algorithm": self._extract_dkim_algo(match.group(1)) if match else None
+            "algorithm": self._extract_dkim_algo(match.group(1)) if match else None,
+            "selector": selector
         }
+
+    def _extract_dkim_selector(self, dkim_content: str) -> str:
+        """Extrait le sélecteur 's=' depuis DKIM-Signature"""
+        if not dkim_content:
+            return None
+        match = re.search(r"s=([^;\s]+)", dkim_content)
+        return match.group(1).strip() if match else None
     
     def _extract_dmarc(self, content: str) -> Dict:
         """Extrait les informations DMARC"""

@@ -196,12 +196,6 @@ class SecurityAnalyzer:
                     90,
                 )
             
-            # Submit MXToolbox DNS checks (if domain extracted)
-            if domain:
-                futures['mxtoolbox_dns'] = executor.submit(
-                    self.mxtoolbox_client.check_domain_dns, domain
-                )
-            
             # Attendre que tous les résultats reviennent
             for api_name, future in futures.items():
                 try:

@@ -107,6 +107,7 @@ class VirusTotalClient(APIClient):
                 "url": url,
                 "stats": data.get("data", {}).get("attributes", {}).get("last_analysis_stats", {}),
                 "verdict": self._analyze_verdict(data),
+                "detail_url": f"https://www.virustotal.com/gui/url/{url_id}",
             }
         except Exception as e:
             return {"error": str(e), "source": "VirusTotal"}
@@ -117,7 +118,12 @@ class VirusTotalClient(APIClient):
         if initial.get("error"):
             return initial
 
+        url_id = base64.urlsafe_b64encode(url.encode("utf-8")).decode("utf-8").strip("=")
+        detail_url = f"https://www.virustotal.com/gui/url/{url_id}"
+
         if initial.get("status") != "QUEUED":
+            if initial.get("url") and not initial.get("detail_url"):
+                initial["detail_url"] = detail_url
             return initial
 
         analysis_id = initial.get("analysis_id")
@@ -145,6 +151,7 @@ class VirusTotalClient(APIClient):
                         "analysis_id": analysis_id,
                         "stats": stats,
                         "verdict": self._verdict_from_stats(stats),
+                        "detail_url": detail_url,
                     }
             except Exception:
                 # Continuer le polling jusqu'au timeout
@@ -158,6 +165,7 @@ class VirusTotalClient(APIClient):
             "status": "QUEUED",
             "analysis_id": analysis_id,
             "message": "Analyse URL VirusTotal en cours (timeout polling).",
+            "detail_url": detail_url,
         }
 
     def check_file(self, file_path: str, file_hash: Optional[str] = None) -> Dict:
@@ -647,7 +655,10 @@ class ScamdocClient(APIClient):
             self.url_path,
             "/Domain_trustscore/{domain_name}",
             "/domain_trustscore/{domain_name}",
+            "/Domain_trustscore/{domain}",
+            "/domain_trustscore/{domain}",
             "/domain/{domain_name}",
+            "/domain/{domain}",
         ]
 
         return self._request_with_fallback(candidate_paths, payload, timeout=timeout)
@@ -669,30 +680,18 @@ class ScamdocClient(APIClient):
 
     def _request_with_fallback(self, paths, payload: Dict, timeout: Optional[int] = None) -> Dict:
         """Essaie plusieurs paths Scamdoc (RapidAPI variants) jusqu'au succès."""
-        errors = []
         for candidate in paths:
             result = self._request(candidate, payload, timeout=timeout)
             if not result.get("error"):
                 return result
 
-            errors.append({
-                "path": candidate,
-                "error": result.get("error"),
-                "endpoint": result.get("endpoint"),
-            })
-
             # Sur timeout ou erreur réseau, inutile de tenter d'autres paths.
             message = (result.get("error") or "").lower()
             if "timed out" in message or "connection" in message:
-                break
+                return result
 
-        return {
-            "source": "Scamdoc",
-            "error": errors[-1]["error"] if errors else "Unknown Scamdoc error",
-            "target": payload,
-            "attempts": errors,
-            "endpoint": errors[-1].get("endpoint") if errors else None,
-        }
+        # Retourner la dernière tentative/erreur
+        return result
 
     def _request(self, path: str, payload: Dict, timeout: Optional[int] = None) -> Dict:
         endpoint_path = path.format(**payload)
@@ -833,6 +832,21 @@ class MXToolboxClient(APIClient):
         self.base_url = MXTOOLBOX_BASE_URL.rstrip("/")
         self.timeout = MXTOOLBOX_TIMEOUT
 
+    @staticmethod
+    def _extract_site_url(data: Dict) -> Optional[str]:
+        """Return the best human-facing MXToolbox URL from a lookup response."""
+        passed = data.get("Passed") or []
+        for item in passed:
+            if isinstance(item, dict) and item.get("Url"):
+                return item.get("Url")
+
+        related = data.get("RelatedLookups") or []
+        for item in related:
+            if isinstance(item, dict) and item.get("URL"):
+                return item.get("URL")
+
+        return None
+
     def lookup(self, command: str, argument: str, port: Optional[int] = None) -> Dict:
         """Generic MXToolbox lookup. Commands: mx, spf, dkim, dmarc, ptr, blacklist, dns, etc."""
         if not self.enabled or not self.api_key:
@@ -861,6 +875,7 @@ class MXToolboxClient(APIClient):
                 "command": command,
                 "argument": argument,
                 "data": data
+                ,"site_url": self._extract_site_url(data)
             }
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
@@ -881,19 +896,35 @@ class MXToolboxClient(APIClient):
         results = {
             "source": "MXToolbox",
             "domain": domain,
-            "records": {}
+            "records": {},
+            "links": {}
         }
 
         # Check MX records
         mx_result = self.lookup("mx", domain)
+        mx_count = 0
         if not mx_result.get("error"):
             data = mx_result.get("data", {})
             information = data.get("Information", [])
+            # MXToolbox "Information" format varies by command. For MX lookups
+            # entries generally contain 'Hostname' and 'Pref' fields. Fall back
+            # to those when "Type" is not present.
             mx_records = []
             for info in information:
-                if info.get("Type") == "MX":
+                if isinstance(info, dict) and (info.get("Hostname") or info.get("Pref") is not None or info.get("IP Address") ):
                     mx_records.append(info)
+                elif info.get("Type") == "MX":
+                    mx_records.append(info)
+
+            # Also accept top-level Records if present
+            if not mx_records and isinstance(data.get("Records"), list):
+                # try to parse simple MX strings
+                for rec in data.get("Records"):
+                    mx_records.append({"raw": rec})
+
             results["records"]["mx"] = mx_records if mx_records else None
+            mx_count = len(mx_records)
+            results["links"]["mx"] = mx_result.get("site_url")
         else:
             results["records"]["mx"] = None
 
@@ -901,13 +932,19 @@ class MXToolboxClient(APIClient):
         spf_result = self.lookup("spf", domain)
         if not spf_result.get("error"):
             data = spf_result.get("data", {})
-            information = data.get("Information", [])
+            # SPF responses often include the raw record in `Records` or as an
+            # Information entry with Type 'record'. Prefer Records when available.
             spf_record = None
-            for info in information:
-                if info.get("Type") == "SPF":
-                    spf_record = info
-                    break
+            if isinstance(data.get("Records"), list) and len(data.get("Records")) > 0:
+                spf_record = {"record": data.get("Records")[0]}
+            else:
+                information = data.get("Information", [])
+                for info in information:
+                    if isinstance(info, dict) and (info.get("Type") in ("SPF", "record") or info.get("Value") and "v=spf1" in str(info.get("Value")).lower()):
+                        spf_record = info
+                        break
             results["records"]["spf"] = spf_record
+            results["links"]["spf"] = spf_result.get("site_url")
         else:
             results["records"]["spf"] = None
 
@@ -917,11 +954,17 @@ class MXToolboxClient(APIClient):
             data = dkim_result.get("data", {})
             information = data.get("Information", [])
             dkim_record = None
-            for info in information:
-                if info.get("Type") == "DKIM":
-                    dkim_record = info
-                    break
+            # DKIM lookups may require a selector; MXToolbox returns keys when
+            # it can find them. Accept any informative entry or top-level Records.
+            if isinstance(data.get("Records"), list) and data.get("Records"):
+                dkim_record = {"record": data.get("Records")[0]}
+            else:
+                for info in information:
+                    if isinstance(info, dict) and (info.get("Type") in ("DKIM", "record") or info.get("Value") and "v=DKIM1" in str(info.get("Value"))):
+                        dkim_record = info
+                        break
             results["records"]["dkim"] = dkim_record
+            results["links"]["dkim"] = dkim_result.get("site_url")
         else:
             results["records"]["dkim"] = None
 
@@ -929,15 +972,25 @@ class MXToolboxClient(APIClient):
         dmarc_result = self.lookup("dmarc", domain)
         if not dmarc_result.get("error"):
             data = dmarc_result.get("data", {})
-            information = data.get("Information", [])
             dmarc_record = None
-            for info in information:
-                if info.get("Type") == "DMARC":
-                    dmarc_record = info
-                    break
+            if isinstance(data.get("Records"), list) and data.get("Records"):
+                dmarc_record = {"record": data.get("Records")[0]}
+            else:
+                information = data.get("Information", [])
+                for info in information:
+                    if isinstance(info, dict) and (info.get("Type") in ("DMARC", "record") or info.get("Value") and "v=dmarc1" in str(info.get("Value")).lower()):
+                        dmarc_record = info
+                        break
             results["records"]["dmarc"] = dmarc_record
+            results["links"]["dmarc"] = dmarc_result.get("site_url")
         else:
             results["records"]["dmarc"] = None
+
+        results["mx_count"] = mx_count
+        results["has_mx"] = mx_count > 0
+        results["has_spf"] = bool(results["records"].get("spf"))
+        results["has_dkim"] = bool(results["records"].get("dkim"))
+        results["has_dmarc"] = bool(results["records"].get("dmarc"))
 
         return results
 
@@ -966,7 +1019,8 @@ class MXToolboxClient(APIClient):
                 "source": "MXToolbox",
                 "ip": ip,
                 "hostname": hostname,
-                "status": "found" if hostname else "not_found"
+                "status": "found" if hostname else "not_found",
+                "url": ptr_result.get("site_url")
             }
         except Exception as e:
             return {"error": str(e), "source": "MXToolbox"}
@@ -980,6 +1034,15 @@ class MXToolboxClient(APIClient):
             blacklist_result = self.lookup("blacklist", domain_or_ip)
             
             if blacklist_result.get("error"):
+                error_text = str(blacklist_result.get("error", ""))
+                if "rate limit" in error_text.lower() or "429" in error_text:
+                    return {
+                        "source": "MXToolbox",
+                        "target": domain_or_ip,
+                        "blacklisted": None,
+                        "status": "MXToolbox RBL indisponible (rate limit)",
+                        "unavailable": True,
+                    }
                 return blacklist_result
             
             data = blacklist_result.get("data", {})
@@ -1000,7 +1063,8 @@ class MXToolboxClient(APIClient):
                 "source": "MXToolbox",
                 "target": domain_or_ip,
                 "blacklisted": is_blacklisted,
-                "status": status
+                "status": status,
+                "url": blacklist_result.get("site_url")
             }
         except Exception as e:
             return {"error": str(e), "source": "MXToolbox"}
@@ -1044,7 +1108,8 @@ class MXToolboxClient(APIClient):
                 "domain": domain,
                 "valid": valid,
                 "mx_count": len(mx_records),
-                "mx_records": mx_records[:3] if mx_records else []
+                "mx_records": mx_records[:3] if mx_records else [],
+                "url": mx_result.get("site_url")
             }
         except Exception as e:
             return {"error": str(e), "source": "MXToolbox"}

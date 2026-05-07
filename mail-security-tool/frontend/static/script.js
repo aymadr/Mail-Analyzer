@@ -21,6 +21,17 @@ function getElement(id) {
     return domCache[id];
 }
 
+// Utility: escape HTML for safe insertion into innerHTML
+function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     initTabs();
@@ -440,6 +451,12 @@ function renderEmailResult(data) {
         const senderResult = scamdoc.sender || {};
         const mxSenderResult = scamdoc.sender_mxtoolbox || {};
         const scamUrls = scamdoc.urls || [];
+        const senderDomain = scamdoc.sender_domain || eInfo?.from || 'N/A';
+        const mxRecords = Array.isArray(mxSenderResult.records?.mx) ? mxSenderResult.records.mx : [];
+        const dnsHasMx = !!mxSenderResult.has_mx;
+        const dnsHasSpf = !!mxSenderResult.has_spf;
+        const dnsHasDkim = !!mxSenderResult.has_dkim;
+        const dnsHasDmarc = !!mxSenderResult.has_dmarc;
 
         html += `<div class="result-card">
             <div class="result-header"><i class="fa-solid fa-user-secret"></i> Scamdoc / MXToolbox - Expéditeur</div>
@@ -451,16 +468,27 @@ function renderEmailResult(data) {
                         ${buildScamdocBox(senderResult)}
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">MXTOOLBOX VALIDATION</span>
+                        <span class="stat-label">MXTOOLBOX DNS DU DOMAINE EXPÉDITEUR</span>
                         ${mxSenderResult.error ? `<div class="api-error-box">${mxSenderResult.error}</div>` : `
                             <div style="margin-top:15px; text-align:center;">
-                                ${mxSenderResult.valid ? `
-                                    <span class="badge badge-clean"><i class="fa-solid fa-check"></i> Domaine Valide</span>
-                                    <p class="text-sm text-muted" style="margin-top:10px;">MX Records: <strong>${mxSenderResult.mx_count || 0}</strong></p>
-                                ` : `
-                                    <span class="badge badge-danger"><i class="fa-solid fa-x"></i> Domaine Invalide</span>
-                                    <p class="text-sm text-muted" style="margin-top:10px;">Aucun MX record trouvé</p>
-                                `}
+                                <span class="badge badge-neutral">${senderDomain}</span>
+                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; text-align:left; font-size:0.9rem;">
+                                    <div><span style="color:var(--text-muted);">MX:</span> <strong>${dnsHasMx ? `OUI (${mxRecords.length})` : 'NON'}</strong></div>
+                                    <div><span style="color:var(--text-muted);">SPF:</span> <strong>${dnsHasSpf ? 'OUI' : 'NON'}</strong></div>
+                                    <div><span style="color:var(--text-muted);">DKIM:</span> <strong>${dnsHasDkim ? 'OUI' : 'NON'}</strong></div>
+                                    <div><span style="color:var(--text-muted);">DMARC:</span> <strong>${dnsHasDmarc ? 'OUI' : 'NON'}</strong></div>
+                                </div>
+                                ${dnsHasMx && mxRecords.length > 0 ? `
+                                    <div style="margin-top:12px; font-size:0.82rem; color:var(--text-muted); text-align:left;">
+                                        ${mxRecords.slice(0, 3).map(r => `${escapeHtml(r.Hostname || r.hostname || 'N/A')} (${escapeHtml(r['IP Address'] || r['IP address'] || r.ip || 'N/A')})`).join('<br>')}
+                                    </div>
+                                ` : `<p class="text-sm text-muted" style="margin-top:10px;">Aucun MX record trouvé pour ce domaine.</p>`}
+                                ${buildSourceLinks([
+                                    { label: 'MXToolbox MX', url: mxSenderResult.links?.mx, icon: 'fa-up-right-from-square' },
+                                    { label: 'MXToolbox SPF', url: mxSenderResult.links?.spf, icon: 'fa-up-right-from-square' },
+                                    { label: 'MXToolbox DKIM', url: mxSenderResult.links?.dkim, icon: 'fa-up-right-from-square' },
+                                    { label: 'MXToolbox DMARC', url: mxSenderResult.links?.dmarc, icon: 'fa-up-right-from-square' }
+                                ])}
                             </div>
                         `}
                     </div>
@@ -481,6 +509,12 @@ function renderEmailResult(data) {
             });
 
             html += `</div></details>`;
+        }
+
+        if (senderResult.public_url || senderResult.detail_url) {
+            html += buildSourceLinks([
+                { label: 'Ouvrir Scamdoc', url: senderResult.detail_url || senderResult.public_url, icon: 'fa-up-right-from-square' }
+            ]);
         }
     }
 
@@ -769,6 +803,7 @@ function renderAttachmentResult(data) {
                     ${ha.threat_level !== undefined ? `<div style="margin-top:8px;"><strong>Niveau de menace:</strong> ${ha.threat_level}</div>` : ''}
                     ${ha.summary ? `<div style="margin-top:8px; color:var(--text-muted);">${ha.summary}</div>` : ''}
                     ${ha.report_url ? `<div style="margin-top:10px;"><a href="${ha.report_url}" target="_blank" class="btn btn-primary" style="display:inline-block;"><i class="fa-solid fa-up-right-from-square"></i> Voir le rapport</a></div>` : ''}
+                    ${ha.report_url ? buildSourceLinks([{ label: 'Ouvrir Hybrid Analysis', url: ha.report_url, icon: 'fa-up-right-from-square' }]) : ''}
                 `;
             }
 
@@ -861,6 +896,7 @@ function renderAttachmentResult(data) {
                     <div style="margin-bottom:10px;">
                         ${buildVerdictBox(result.verdict, buildVtStats(result.stats))}
                     </div>
+                    ${result.url ? `<div style="margin-top:10px;"><a href="${result.url}" target="_blank" class="text-primary"><i class="fa-solid fa-up-right-from-square"></i> Vérifier sur VirusTotal</a></div>` : ''}
                 `;
             }
 
@@ -924,7 +960,6 @@ function renderAttachmentResult(data) {
 function renderUrlResult(data) {
     const el = document.getElementById('urlResult');
     const ha = data.hybrid_analysis || {};
-    const mxDns = data.mxtoolbox_dns || {};
     
     let html = `
         <div class="result-card">
@@ -949,6 +984,7 @@ function renderUrlResult(data) {
                 ${buildVtStats(data.virustotal.stats)}
             </div>`;
         }
+        html += `${data.virustotal.detail_url ? buildSourceLinks([{ label: 'Ouvrir VirusTotal', url: data.virustotal.detail_url, icon: 'fa-up-right-from-square' }]) : ''}`;
         html += `</div>`;
     }
 
@@ -981,29 +1017,7 @@ function renderUrlResult(data) {
     if(data.scamdoc) {
         html += `<div class="stat-item"><span class="stat-label"><i class="fa-solid fa-user-secret"></i> Scamdoc</span>`;
         html += buildScamdocBox(data.scamdoc);
-        html += `</div>`;
-    }
-
-    // MXToolbox DNS
-    if(mxDns) {
-        html += `<div class="stat-item"><span class="stat-label"><i class="fa-solid fa-network-wired"></i> MXToolbox DNS</span>`;
-        if(mxDns.error) {
-            html += `<div class="api-error-box">${mxDns.error}</div>`;
-        } else {
-            const records = mxDns.records || {};
-            const mxCount = (records.mx && records.mx.length) || 0;
-            const hasSPF = records.spf ? 'OUI' : 'NON';
-            const hasDKIM = records.dkim ? 'OUI' : 'NON';
-            const hasDMARC = records.dmarc ? 'OUI' : 'NON';
-            html += `<div style="margin-top:15px; text-align:center;">
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:0.9rem;">
-                    <div><span style="color:var(--text-muted);">MX Records:</span> <strong>${mxCount}</strong></div>
-                    <div><span style="color:var(--text-muted);">SPF:</span> <strong>${hasSPF}</strong></div>
-                    <div><span style="color:var(--text-muted);">DKIM:</span> <strong>${hasDKIM}</strong></div>
-                    <div><span style="color:var(--text-muted);">DMARC:</span> <strong>${hasDMARC}</strong></div>
-                </div>
-            </div>`;
-        }
+        html += `${data.scamdoc.detail_url ? buildSourceLinks([{ label: 'Ouvrir Scamdoc', url: data.scamdoc.detail_url, icon: 'fa-up-right-from-square' }]) : ''}`;
         html += `</div>`;
     }
 
@@ -1055,12 +1069,18 @@ function renderIpResult(data) {
             <span class="badge badge-neutral">Non trouvé</span>
         </div>`;
     }
+    html += `${mxPtr.url ? buildSourceLinks([{ label: 'Ouvrir MXToolbox PTR', url: mxPtr.url, icon: 'fa-up-right-from-square' }]) : ''}`;
     html += `</div>`;
 
     // MXToolbox RBL
     html += `<div class="stat-item"><span class="stat-label"><i class="fa-solid fa-ban"></i> MXToolbox RBL</span>`;
     if(mxRbl.error) html += `<div class="api-error-box">${mxRbl.error}</div>`;
-    else {
+    else if (mxRbl.unavailable) {
+        html += `<div style="margin-top:15px; text-align:center; color:var(--text-muted);">
+            <span class="badge badge-neutral">Indisponible</span>
+            <p class="text-sm text-muted" style="margin-top:8px;">${mxRbl.status || 'MXToolbox RBL indisponible'}</p>
+        </div>`;
+    } else {
         const isBlacklisted = mxRbl.blacklisted === true;
         const badgeType = isBlacklisted ? 'danger' : 'clean';
         const badgeText = isBlacklisted ? 'LISTÉE' : 'NON LISTÉE';
@@ -1069,6 +1089,7 @@ function renderIpResult(data) {
             <p class="text-sm text-muted" style="margin-top:8px;">${mxRbl.status || 'Status inconnu'}</p>
         </div>`;
     }
+    html += `${mxRbl.url ? buildSourceLinks([{ label: 'Ouvrir MXToolbox RBL', url: mxRbl.url, icon: 'fa-up-right-from-square' }]) : ''}`;
     html += `</div>`;
 
     // AbuseIPDB
@@ -1085,6 +1106,7 @@ function renderIpResult(data) {
             </div>
         `;
     }
+    html += `${ab.url ? buildSourceLinks([{ label: 'Ouvrir AbuseIPDB', url: ab.url, icon: 'fa-up-right-from-square' }]) : ''}`;
     html += `</div>`;
 
     // VirusTotal
@@ -1096,6 +1118,7 @@ function renderIpResult(data) {
             ${buildVtStats(vt.last_analysis_stats || {})}
         </div>`;
     }
+    html += `${vt.url ? buildSourceLinks([{ label: 'Ouvrir VirusTotal', url: vt.url, icon: 'fa-up-right-from-square' }]) : ''}`;
     html += `</div>`;
 
     html += `</div></div></div>`;
@@ -1209,12 +1232,30 @@ function buildVerdictBox(verdict, statsHtml) {
 
 function buildScamdocBox(result) {
     result = result || {};
+    if (result.status === 'UNAVAILABLE') {
+        return `<div style="text-align:center; padding-top:8px;">
+            <span class="badge badge-neutral">INDISPONIBLE</span>
+            <div style="margin-top:10px; font-size:0.85rem; color:var(--text-muted);">
+                Scamdoc n'a pas répondu via l'API RapidAPI.
+            </div>
+            ${result.public_url ? `<div style="margin-top:10px;"><a href="${result.public_url}" target="_blank" class="text-primary">Ouvrir Scamdoc</a></div>` : ''}
+        </div>`;
+    }
     if (result.error) {
-        if ((result.error || '').toLowerCase().includes('timed out')) {
+        const errorText = (result.error || '').toLowerCase();
+        if (errorText.includes('timed out')) {
             return `<div style="text-align:center; padding-top:8px;">
                 <span class="badge badge-neutral">EN COURS</span>
                 <div style="margin-top:10px; font-size:0.85rem; color:var(--text-muted);">
                     Scamdoc met du temps à répondre. Réessaie dans quelques secondes.
+                </div>
+            </div>`;
+        }
+        if (errorText.includes('indisponible')) {
+            return `<div style="text-align:center; padding-top:8px;">
+                <span class="badge badge-neutral">INDISPONIBLE</span>
+                <div style="margin-top:10px; font-size:0.85rem; color:var(--text-muted);">
+                    Scamdoc n'a pas pu être interrogé pour cet élément.
                 </div>
             </div>`;
         }
@@ -1237,6 +1278,22 @@ function buildScamdocBox(result) {
                 <div>Risk Score: ${risk !== null && risk !== undefined ? Math.round(risk) + '%' : 'N/A'}</div>
             </div>
             ${result.detail_url ? `<div style="margin-top:10px;"><a href="${result.detail_url}" target="_blank" class="text-primary">Voir détails</a></div>` : ''}
+        </div>
+    `;
+}
+
+function buildSourceLinks(items) {
+    const validItems = (items || []).filter(item => item && item.url);
+    if (validItems.length === 0) return '';
+
+    return `
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;">
+            ${validItems.map(item => `
+                <a href="${item.url}" target="_blank" class="badge badge-neutral" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+                    ${item.icon ? `<i class="fa-solid ${item.icon}"></i>` : ''}
+                    ${escapeHtml(item.label || 'Voir la source')}
+                </a>
+            `).join('')}
         </div>
     `;
 }
