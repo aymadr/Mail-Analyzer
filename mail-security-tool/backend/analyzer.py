@@ -38,13 +38,29 @@ class SecurityAnalyzer:
         email_hash = hashlib.sha256(
             f"{email_data['from']}{email_data['subject']}".encode()
         ).hexdigest()
+
+        # Si analyse déjà en cache, la retourner directement (préserve quota API)
+        cached_email = self.db.get_email_analysis(email_hash)
+        if cached_email:
+            return cached_email
         
         # Analyse les IPs
         ip_results = []
         for ip in email_data.get('ips', []):
+            # Vérifier le cache IP avant d'appeler les APIs
+            ip_cached = self.db.get_ip_analysis(ip)
+            if ip_cached:
+                ip_results.append({
+                    "ip": ip,
+                    "virustotal": ip_cached.get("vt"),
+                    "abuseipdb": ip_cached.get("abuseipdb"),
+                    "cached": True,
+                })
+                continue
+
             vt_ip = self.vt_client.check_ip(ip)
             abuseipdb_ip = self.abuseipdb_client.check_ip(ip)
-            
+
             ip_results.append({
                 "ip": ip,
                 "virustotal": vt_ip,
@@ -57,9 +73,16 @@ class SecurityAnalyzer:
         for attachment in email_data.get('attachments', []):
             vt_results = {}
             for hash_type in ['md5', 'sha1', 'sha256']:
-                vt_result = self.vt_client.check_file_hash(attachment[hash_type])
+                file_hash = attachment[hash_type]
+                # Vérifier le cache de hash de fichier avant d'appeler VirusTotal
+                cached_hash = self.db.get_file_hash_analysis(file_hash)
+                if cached_hash:
+                    vt_results[hash_type] = cached_hash
+                    continue
+
+                vt_result = self.vt_client.check_file_hash(file_hash)
                 vt_results[hash_type] = vt_result
-                self.db.save_file_hash_analysis(attachment[hash_type], hash_type, vt_result)
+                self.db.save_file_hash_analysis(file_hash, hash_type, vt_result)
             
             attachment_results.append({
                 "filename": attachment['filename'],
@@ -111,19 +134,25 @@ class SecurityAnalyzer:
         # Utilise ThreadPoolExecutor pour appeler les APIs en parallèle
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = {}
-            
-            # Submit VirusTotal hash checks (MD5, SHA1, SHA256)
+
+            # Submit VirusTotal hash checks (MD5, SHA1, SHA256) only si non en cache
             for hash_type in ['md5', 'sha1', 'sha256']:
+                file_hash = hashes[hash_type]
+                cached = self.db.get_file_hash_analysis(file_hash)
+                if cached:
+                    results["virustotal"][hash_type] = cached
+                    continue
+
                 futures[f'vt_{hash_type}'] = executor.submit(
-                    self.vt_client.check_file_hash, hashes[hash_type]
+                    self.vt_client.check_file_hash, file_hash
                 )
-            
+
             # Submit Hybrid Analysis (if enabled)
             if self.hybrid_analysis_client.enabled:
                 futures['hybrid_analysis'] = executor.submit(
                     self.hybrid_analysis_client.submit_file, file_path
                 )
-            
+
             # Attendre que tous les résultats reviennent
             for key, future in futures.items():
                 try:
@@ -144,6 +173,14 @@ class SecurityAnalyzer:
     
     def analyze_ip(self, ip: str) -> Dict:
         """Analyse complète d'une adresse IP"""
+        # Vérifier le cache avant d'appeler les APIs
+        ip_cached = self.db.get_ip_analysis(ip)
+        if ip_cached:
+            # Si le cache contient déjà les clés attendues, renvoyer tel quel
+            ip_cached.setdefault("ip", ip)
+            ip_cached["cached"] = True
+            return ip_cached
+
         results = {"ip": ip}
         
         # Utilise ThreadPoolExecutor pour appeler les APIs en parallèle
@@ -170,6 +207,13 @@ class SecurityAnalyzer:
     def analyze_url(self, url: str) -> Dict:
         """Analyse complète d'une URL"""
         normalized_url = self._normalize_url(url)
+        # Vérifier le cache URL avant d'appeler les APIs
+        url_cached = self.db.get_url_analysis(normalized_url)
+        if url_cached:
+            url_cached.setdefault("url", normalized_url)
+            url_cached["cached"] = True
+            return url_cached
+
         results = {"url": normalized_url}
         
         # Extraire le domaine pour les checks MXToolbox
