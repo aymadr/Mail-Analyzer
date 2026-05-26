@@ -2,7 +2,7 @@
 
 ##  Démarrage Rapide
 
-###  Option 1: Interface Web (Recommandée)
+###  Option 1: Interface Web 
 
 **Méthode 1A - Double-cliquer sur `run.bat` (le plus simple)**
 ```batch
@@ -161,76 +161,33 @@ HYBRID_ANALYSIS_MAX_FILESIZE_MB=30
 - Gestion des variables d'environnement
 - Paramètres API et timeouts
 
-```python
-from backend.config import VIRUSTOTAL_API_KEY, API_TIMEOUT
-```
 
 #### 2. `email_parser.py`
 - Parse des entêtes email
 - Extraction SPF, DKIM, DMARC
 - Extraction IPs et domaines
 
-```python
-from backend.email_parser import EmailHeaderParser
-
-parser = EmailHeaderParser()
-result = parser.parse_eml_file("email.eml")
-print(result['spf'])
-print(result['ips'])
-```
 
 #### 3. `hash_calculator.py`
 - Calcul MD5, SHA1, SHA256
 - Calcul depuis fichier ou bytes
 
-```python
-from backend.hash_calculator import HashCalculator
-
-hashes = HashCalculator.calculate_file_hashes("file.exe")
-print(hashes['md5'])
-print(hashes['sha256'])
-```
 
 #### 4. `api_clients.py`
 - Clients pour VirusTotal, URLScan.io, AbuseIPDB, Scamdoc, MXToolbox et Hybrid Analysis
 - Gestion des retries et erreurs
 
-```python
-from backend.api_clients import VirusTotalClient, AbuseIPDBClient
-
-vt = VirusTotalClient()
-result = vt.check_file_hash("5d41402abc4b2a76b9719d911017c592")
-print(result['verdict'])  # CLEAN, SUSPICIOUS, MALICIOUS
-
-abuseipdb = AbuseIPDBClient()
-ip_result = abuseipdb.check_ip("8.8.8.8")
-print(ip_result['abuse_confidence_score'])
-```
 
 #### 5. `database.py`
 - Cache SQLite
 - Sauvegarde/récupération des analyses
 
-```python
-from backend.database import Database
 
-db = Database()
-db.save_file_hash_analysis("abc123", "md5", {"verdict": "CLEAN"})
-result = db.get_file_hash_analysis("abc123")
-```
 
 #### 6. `analyzer.py`
 - Orchestrateur principal
 - Coordonne toutes les analyses
 
-```python
-from backend.analyzer import SecurityAnalyzer
-
-analyzer = SecurityAnalyzer()
-email_analysis = analyzer.analyze_email_file("email.eml")
-attachment_analysis = analyzer.analyze_attachment("file.exe")
-url_analysis = analyzer.analyze_url("https://example.com")
-```
 
 ##  Utilisation du Frontend
 

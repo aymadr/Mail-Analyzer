@@ -228,8 +228,6 @@ HYBRID_ANALYSIS_USER_AGENT=secanalyze-tool-1.0
 HYBRID_ANALYSIS_MAX_FILESIZE_MB=30
 ```
 
-> Obtenez une clé API gratuite sur: https://hybrid-analysis.com/
-
 ### Changer le chemin de la BD
 ```python
 # backend/config.py
