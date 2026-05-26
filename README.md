@@ -311,14 +311,6 @@ python app.py --port 5001
 - [ ] Export PDF/CSV des rapports
 - [ ] Dashboard analytics
 - [ ] Intégration Slack/Email pour alertes
-- [ ] Support multi-threading
-- [ ] Docker container
-- [ ] Tests unitaires
 
-
-
-## Support
-
-Pour des questions ou améliorations, n'hésite pas à me contacter !
 
 
