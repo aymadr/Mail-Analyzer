@@ -1,58 +1,58 @@
-# Mail Security Analyzer 🔒
+# Mail Security Analyzer 
 
 Outil d'analyse de sécurité email centralisé intégrant VirusTotal, URLScan.io, AbuseIPDB, Scamdoc (ScamPredictor via RapidAPI), MXToolbox et Hybrid Analysis pour l'analyse dynamique optionnelle.
 
 ## Aperçu
 
-### 📊 Dashboard Principal
+### Dashboard Principal
 <div align="center">
   <img src="mail-security-tool/src/dashboard.png" alt="Dashboard SecAnalyze" width="90%" style="border-radius: 8px; margin: 15px 0;">
 </div>
 
-### 📧 Analyse d'Email
+###  Analyse d'Email
 <div align="center">
   <img src="mail-security-tool/src/AE1.png" alt="Email Analysis 1" width="45%" style="border-radius: 8px; margin: 10px;">
   <img src="mail-security-tool/src/AE2.png" alt="Email Analysis 2" width="45%" style="border-radius: 8px; margin: 10px;">
   <img src="mail-security-tool/src/AE3.png" alt="Email Analysis 3" width="90%" style="border-radius: 8px; margin: 15px 0;">
 </div>
 
-### 📁 Analyse de Pièce Jointe
+###  Analyse de Pièce Jointe
 <div align="center">
   <img src="mail-security-tool/src/PJ1.png" alt="Attachment 1" width="45%" style="border-radius: 8px; margin: 10px;">
   <img src="mail-security-tool/src/PJ2.png" alt="Attachment 2" width="45%" style="border-radius: 8px; margin: 10px;">
   <img src="mail-security-tool/src/PJ3.png" alt="Attachment 3" width="90%" style="border-radius: 8px; margin: 15px 0;">
 </div>
 
-### 🔗 Analyse d'URL
+###  Analyse d'URL
 <div align="center">
   <img src="mail-security-tool/src/AU.png" alt="URL Analysis" width="90%" style="border-radius: 8px; margin: 15px 0;">
 </div>
 
-### 🖥️ Analyse d'IP
+###  Analyse d'IP
 <div align="center">
   <img src="mail-security-tool/src/IP.png" alt="IP Analysis" width="90%" style="border-radius: 8px; margin: 15px 0;">
 </div>
 
-### 📜 Historique
+###  Historique
 <div align="center">
   <img src="mail-security-tool/src/hISTORIQUE.png" alt="History" width="90%" style="border-radius: 8px; margin: 15px 0;">
 </div>
 
-## 🎯 Fonctionnalités
+##  Fonctionnalités
 
-- ✅ **Analyse d'email** : Parse entête SPF, DKIM, DMARC
-- ✅ **Extraction d'informations** : IPs, domaines, en-têtes
-- ✅ **Calcul de hash** : MD5, SHA1, SHA256
-- ✅ **Analyse de pièces jointes** : Vérification VirusTotal
-- ✅ **Analyse d'URLs** : Vérification VirusTotal + URLScan.io + Scamdoc + MXToolbox
-- ✅ **Analyse d'IPs** : VirusTotal + AbuseIPDB + MXToolbox (PTR/RBL)
-- ✅ **Scoring Scamdoc** : Trust Score et Risk Score pour domaines/URLs
-- ✅ **Analyse DNS** : MX/SPF/DKIM/DMARC via MXToolbox
-- ✅ **Analyse dynamique** : Hybrid Analysis optionnel (fichiers et URLs)
-- ✅ **Base de données** : Cache local SQLite
-- ✅ **Interface web** : Dashboard moderne et intuitif
+- **Analyse d'email** : Parse entête SPF, DKIM, DMARC
+- **Extraction d'informations** : IPs, domaines, en-têtes
+- **Calcul de hash** : MD5, SHA1, SHA256
+- **Analyse de pièces jointes** : Vérification VirusTotal
+- **Analyse d'URLs** : Vérification VirusTotal + URLScan.io + Scamdoc + MXToolbox
+- **Analyse d'IPs** : VirusTotal + AbuseIPDB + MXToolbox (PTR/RBL)
+- **Scoring Scamdoc** : Trust Score et Risk Score pour domaines/URLs
+- **Analyse DNS** : MX/SPF/DKIM/DMARC via MXToolbox
+- **Analyse dynamique** : Hybrid Analysis optionnel (fichiers et URLs)
+- **Base de données** : Cache local SQLite
+- **Interface web** : Dashboard moderne et intuitif
 
-## 📊 Architecture
+## Architecture
 
 ```
 mail-security-tool/
@@ -76,11 +76,11 @@ mail-security-tool/
 └── README.md                  # Ce fichier
 ```
 
-## 🚀 Démarrage Rapide - Deux Options
+## Démarrage Rapide - Deux Options
 
 Pour en savoir plus sur l'installation, notamment des clés API: ** Consulte le guide complet : [INSTALLATION.md](mail-security-tool/INSTALLATION.md)**
 
-### ✅ Option 1: Double-clic sur run.bat (Only Windows)
+### Option 1: Double-clic sur run.bat (Only Windows)
 
 ```
 Double-cliquer sur: run.bat
@@ -92,7 +92,7 @@ Double-cliquer sur: run.bat
 - Démarre le serveur Flask
 - Accès: http://127.0.0.1:5000
 
-### ✅ Option 2: Docker (Windows/Mac/Linux)
+### Option 2: Docker (Windows/Mac/Linux)
 
 **Prérequis:** Docker Desktop installé
 
@@ -108,7 +108,7 @@ docker compose up --build -d
 
 ---
 
-## 🚀 Installation Détaillée 
+## Installation Détaillée 
 
 ### Prérequis
 - Windows 10/11
@@ -157,7 +157,7 @@ docker compose up --build -d
 7. **Accéder à l'interface**
    - Ouvrir navigateur: `http://127.0.0.1:5000`
 
-## 🐳 Pourquoi Docker ?
+## Pourquoi Docker ?
 
 Docker est inclus pour exécuter l'application dans un environnement standardisé, sans dépendre de la configuration locale.
 
@@ -171,7 +171,7 @@ Le stack Docker du projet:
 - [mail-security-tool/Dockerfile](mail-security-tool/Dockerfile): construit l'image applicative
 - [mail-security-tool/docker-compose.yml](mail-security-tool/docker-compose.yml): lance le service web, mappe le port `5000` et persiste `data/` et `uploads/`
 
-## 📖 Utilisation
+## Utilisation
 
 ### 1. Analyse d'Email
 - Charger un fichier `.eml` ou `.msg`
@@ -211,7 +211,7 @@ Note: ce n'est pas un traceroute réseau en direct. L'analyse est basée sur les
 - Vérifie sur VirusTotal, AbuseIPDB et MXToolbox (PTR/RBL)
 - Affiche pays, ASN, score de confiance abus
 
-## 🔧 Configuration Avancée
+## Configuration Avancée
 
 ### Modifier le timeout API
 ```python
@@ -245,7 +245,7 @@ ABUSEIPDB_RATE_LIMIT = 1     # 1 req/s
 SCAMDOC_RATE_LIMIT = 1       # 1 req/s
 ```
 
-## 📝 API Endpoints
+## API Endpoints
 
 ### Email
 ```
@@ -283,16 +283,16 @@ GET /api/history?limit=50
 GET /api/report/<email_hash>
 ```
 
-## 🔐 Sécurité
+## Sécurité
 
-- ✅ Clés API dans `.env` (jamais en dur)
-- ✅ Validation des fichiers uploadés
-- ✅ Limite de taille (50MB)
-- ✅ Validation des IPs/URLs
-- ✅ CORS à configurer si nécessaire
-- ✅ Hybrid Analysis désactivable par variable d'environnement
+- Clés API dans `.env` (jamais en dur)
+- Validation des fichiers uploadés
+- Limite de taille (50MB)
+- Validation des IPs/URLs
+- CORS à configurer si nécessaire
+- Hybrid Analysis désactivable par variable d'environnement
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### "API key not configured"
 → Vérifie ton fichier `.env`
@@ -305,7 +305,7 @@ GET /api/report/<email_hash>
 python app.py --port 5001
 ```
 
-## 📈 À améliorer
+## À améliorer
 
 - [ ] Authentication utilisateur
 - [ ] Export PDF/CSV des rapports
@@ -315,14 +315,10 @@ python app.py --port 5001
 - [ ] Docker container
 - [ ] Tests unitaires
 
-## 📄 License
 
-MIT
 
-## 👥 Support
+## Support
 
 Pour des questions ou améliorations, n'hésite pas à me contacter !
 
----
 
-**Dernière mise à jour:** Avril 2026
