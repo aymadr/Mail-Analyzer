@@ -1,8 +1,8 @@
 # Installation et Utilisation - Windows Only
 
-## 🚀 Démarrage Rapide
+##  Démarrage Rapide
 
-### ✅ Option 1: Interface Web (Recommandée)
+###  Option 1: Interface Web (Recommandée)
 
 **Méthode 1A - Double-cliquer sur `run.bat` (le plus simple)**
 ```batch
@@ -47,7 +47,7 @@ python run.py
 
 → L'application démarre sur http://127.0.0.1:5000
 
-### 🐳 Option 2: Docker
+###  Option 2: Docker
 
 **Prérequis:** Docker Desktop installé sur Windows
 
@@ -77,35 +77,7 @@ docker compose down
 docker ps
 ```
 
-### 💻 Option 3: Ligne de Commande (CLI) - PAS ENCORE FINI
-
-```powershell
-# Activer l'environnement virtuel
-.\venv\Scripts\Activate.ps1
-
-# Analyser un email
-python cli.py --email mon_email.eml
-
-# Analyser une pièce jointe
-python cli.py --attachment malware.exe
-
-# Analyser une URL
-python cli.py --url https://suspicious.com
-
-# Analyser une IP
-python cli.py --ip 192.168.1.1
-
-# Calculer le hash d'un fichier
-python cli.py --hash C:\path\to\file.exe
-
-# Output en JSON
-python cli.py --email mon_email.eml --json
-
-# Avec détails supplémentaires
-python cli.py --email mon_email.eml -v
-```
-
-## 🔑 Obtenir les Clés API
+##  Obtenir les Clés API
 
 ### 1. VirusTotal
 1. Aller sur https://www.virustotal.com
@@ -181,7 +153,7 @@ HYBRID_ANALYSIS_MAX_FILESIZE_MB=30
 ```
 
 
-## 📊 Architecture Modulaire
+##  Architecture Modulaire
 
 ### Backend Modules
 
@@ -260,7 +232,7 @@ attachment_analysis = analyzer.analyze_attachment("file.exe")
 url_analysis = analyzer.analyze_url("https://example.com")
 ```
 
-## 🎨 Utilisation du Frontend
+##  Utilisation du Frontend
 
 ### Onglets Disponibles
 
@@ -284,7 +256,7 @@ url_analysis = analyzer.analyze_url("https://example.com")
 5. **Historique** - Voir les analyses précédentes
    - Accès rapide aux rapports
 
-## 💾 Structure de la Base de Données
+##  Structure de la Base de Données
 
 ```sql
 -- Email Analysis
@@ -327,7 +299,7 @@ CREATE TABLE url_analysis (
 );
 ```
 
-## 🔄 Workflow d'Analyse
+##  Workflow d'Analyse
 
 ```
 Email Reçu
@@ -355,7 +327,7 @@ Email Reçu
     └─ Affiche le rapport complet
 ```
 
-## 🛡️ Bonnes Pratiques de Sécurité
+##  Bonnes Pratiques de Sécurité
 
 1. **Protéger les clés API**
    - Jamais commit `.env` en Git
@@ -373,7 +345,7 @@ Email Reçu
    - Configurer SSL/TLS
    - Utiliser Gunicorn + Nginx
 
-## 🐛 Debugging
+##  Debugging
 
 ### Activer les logs verbeux
 ```python
@@ -396,7 +368,7 @@ analyses = db.get_all_analyses(10)
 print(analyses)
 ```
 
-## 📚 Ressources Utiles
+##  Ressources Utiles
 
 - [VirusTotal API](https://developers.virustotal.com/v3.0/reference)
 - [URLScan.io API](https://urlscan.io/docs/api/)
