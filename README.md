@@ -41,16 +41,21 @@ Outil d'analyse de sécurité email centralisé intégrant VirusTotal, URLScan.i
 ##  Fonctionnalités
 
 - **Analyse d'email** : Parse entête SPF, DKIM, DMARC
-- **Extraction d'informations** : IPs, domaines, en-têtes
+- **Extraction d'informations** : IPs, domaines, URLs, en-têtes
 - **Calcul de hash** : MD5, SHA1, SHA256
-- **Analyse de pièces jointes** : Vérification VirusTotal
-- **Analyse d'URLs** : Vérification VirusTotal + URLScan.io + Scamdoc + MXToolbox
+- **Analyse de pièces jointes** : Vérification VirusTotal + Hybrid Analysis optionnel
+- **Analyse d'URLs** : Vérification VirusTotal + URLScan.io + Scamdoc + Hybrid Analysis optionnel
 - **Analyse d'IPs** : VirusTotal + AbuseIPDB + MXToolbox (PTR/RBL)
 - **Scoring Scamdoc** : Trust Score et Risk Score pour domaines/URLs
+- **Analyse de redirections** : chaîne HTTP des URLs extraites d'un email
 - **Analyse DNS** : MX/SPF/DKIM/DMARC via MXToolbox
 - **Analyse dynamique** : Hybrid Analysis optionnel (fichiers et URLs)
-- **Base de données** : Cache local SQLite
-- **Interface web** : Dashboard moderne et intuitif
+- **Base de données** : Cache local SQLite pour éviter de relancer les mêmes requêtes API
+
+Le cache SQLite conserve les résultats déjà calculés pour les emails, les hashes de pièces jointes, les IPs et les URLs. Quand une même analyse est relancée, l'application relit d'abord la base locale et réutilise la réponse existante au lieu de refaire un appel API identique.
+
+> Fonctionnalité en réflexion: une future analyse de texte pourrait être ajoutée plus tard, avec un agent IA ou OCR et des sources externes, mais le module actuel basé sur des patterns simples est désactivé pour le moment.
+
 
 ## Architecture
 
@@ -179,7 +184,10 @@ Le stack Docker du projet:
   - En-têtes SPF, DKIM, DMARC
   - IPs et domaines
    - Vérifie les IPs sur VirusTotal et AbuseIPDB
-   - Vérifie les domaines/URLs extraits via Scamdoc
+   - Extrait les URLs du message, les déduplique et les regroupe par domaine racine
+   - Vérifie les domaines et URLs extraits via Scamdoc
+   - Suit la chaîne de redirections HTTP des URLs extraites quand c'est possible
+   - Si des pièces jointes sont présentes, calcule leurs hash MD5/SHA1/SHA256 puis les vérifie sur VirusTotal
 
 #### Analyse des Routages (IPs)
 Dans le rapport d'analyse email, la section **Analyse des Routages (IPs)** affiche le chemin technique du message à partir des en-têtes mail.
@@ -198,12 +206,14 @@ Note: ce n'est pas un traceroute réseau en direct. L'analyse est basée sur les
 - Charger le fichier suspect
 - Calcule: MD5, SHA1, SHA256
 - Vérifie les hash sur VirusTotal
-- Soumet optionnellement l'échantillon à Hybrid Analysis si activé dans `.env`
+- Soumet l'échantillon à Hybrid Analysis 
+- On peut aussi coller directement un hash MD5, SHA1 ou SHA256 déjà extrait depuis l'analyse d'un email pour relancer les recherches sans recharger le fichier
+- Les hash affichés dans le rapport peuvent être copiés d'un clic
 - Affiche le verdict (Malveillant/Suspect/Propre)
 
 ### 3. Analyse d'URL
 - Entrer une URL
-- Analyse via VirusTotal, URLScan.io, Scamdoc, Hybrid Analysis (optionnel) et MXToolbox (DNS)
+- Analyse via VirusTotal, URLScan.io, Scamdoc et Hybrid Analysis (optionnel)
 - Affiche le verdict et les détails (dont Trust Score et Risk Score Scamdoc)
 
 ### 4. Analyse d'IP
@@ -234,14 +244,6 @@ HYBRID_ANALYSIS_MAX_FILESIZE_MB=30
 DB_PATH = "chemin/vers/ma/bdd.db"
 ```
 
-### Rate Limiting
-```python
-# backend/config.py
-VIRUSTOTAL_RATE_LIMIT = 4    # 4 req/min
-URLSCAN_RATE_LIMIT = 1       # 1 req/s
-ABUSEIPDB_RATE_LIMIT = 1     # 1 req/s
-SCAMDOC_RATE_LIMIT = 1       # 1 req/s
-```
 
 ## API Endpoints
 
@@ -303,12 +305,6 @@ GET /api/report/<email_hash>
 python app.py --port 5001
 ```
 
-## À améliorer
-
-- [ ] Authentication utilisateur
-- [ ] Export PDF/CSV des rapports
-- [ ] Dashboard analytics
-- [ ] Intégration Slack/Email pour alertes
 
 
 
