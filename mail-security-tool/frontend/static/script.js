@@ -1299,10 +1299,15 @@ function loadDashboard() {
     const dashboardSummary = document.getElementById('dashboardSummary');
     if(!dashboardSummary) return;
     
+    // Clear previous chart if exists
+    if(window.activityChart) {
+        window.activityChart.destroy();
+    }
+    
     dashboardSummary.innerHTML = `
-        <div class="loader-container">
+        <div class="loader-container" style="min-height: 300px;">
             <div class="spinner"></div>
-            <p style="color: var(--primary); font-family: var(--font-mono); font-size: 0.9rem;">[ CHARGEMENT DES STATISTIQUES... ]</p>
+            <p style="color: var(--primary); font-family: var(--font-mono); font-size: 0.9rem;">[ CHARGEMENT... ]</p>
         </div>
     `;
     
@@ -1310,56 +1315,105 @@ function loadDashboard() {
         .then(res => res.json())
         .then(data => {
             const totals = data.totals || {emails: 0, attachments: 0, ips: 0, urls: 0};
-            const latestEmail = data.latest_email || {};
             
-            let html = `
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:30px;">
-                    <div style="padding:20px; background:rgba(147, 112, 219, 0.1); border-radius:8px; border:1px solid rgba(147, 112, 219, 0.3); text-align:center;">
-                        <i class="fa-solid fa-envelope" style="font-size:2rem; color:#9370DB; margin-bottom:10px;"></i>
-                        <div style="font-size:2rem; font-weight:700; color:var(--text-primary);">${totals.emails}</div>
-                        <div style="font-size:0.85rem; color:var(--text-muted); margin-top:5px;">Emails Analysés</div>
-                    </div>
-                    
-                    <div style="padding:20px; background:rgba(52, 152, 219, 0.1); border-radius:8px; border:1px solid rgba(52, 152, 219, 0.3); text-align:center;">
-                        <i class="fa-solid fa-file" style="font-size:2rem; color:#3498DB; margin-bottom:10px;"></i>
-                        <div style="font-size:2rem; font-weight:700; color:var(--text-primary);">${totals.attachments}</div>
-                        <div style="font-size:0.85rem; color:var(--text-muted); margin-top:5px;">Fichiers Scannés</div>
-                    </div>
-                    
-                    <div style="padding:20px; background:rgba(46, 204, 113, 0.1); border-radius:8px; border:1px solid rgba(46, 204, 113, 0.3); text-align:center;">
-                        <i class="fa-solid fa-link" style="font-size:2rem; color:#2ECC71; margin-bottom:10px;"></i>
-                        <div style="font-size:2rem; font-weight:700; color:var(--text-primary);">${totals.urls}</div>
-                        <div style="font-size:0.85rem; color:var(--text-muted); margin-top:5px;">URLs Vérifiées</div>
-                    </div>
-                    
-                    <div style="padding:20px; background:rgba(230, 126, 34, 0.1); border-radius:8px; border:1px solid rgba(230, 126, 34, 0.3); text-align:center;">
-                        <i class="fa-solid fa-server" style="font-size:2rem; color:#E67E22; margin-bottom:10px;"></i>
-                        <div style="font-size:2rem; font-weight:700; color:var(--text-primary);">${totals.ips}</div>
-                        <div style="font-size:0.85rem; color:var(--text-muted); margin-top:5px;">IPs Analysées</div>
-                    </div>
-                </div>
-            `;
+            // Create bar chart container
+            dashboardSummary.innerHTML = '<canvas id="activityBarChart"></canvas>';
             
-            // Latest Email Info
-            if(latestEmail.sender || latestEmail.subject) {
-                html += `
-                    <div style="padding:15px; background:rgba(255,255,255,0.05); border-radius:8px; border-left:4px solid var(--primary); margin-bottom:15px;">
-                        <p style="font-size:0.85rem; color:var(--text-muted); margin:0 0 5px 0;">📧 Dernier Email</p>
-                        <p style="font-size:0.9rem; color:var(--text-primary); margin:0 0 3px 0; word-break:break-all;"><strong>${latestEmail.sender || 'N/A'}</strong></p>
-                        <p style="font-size:0.85rem; color:var(--text-muted); margin:0; word-break:break-all;">${latestEmail.subject || 'N/A'}</p>
-                        <p style="font-size:0.8rem; color:var(--text-muted); margin:5px 0 0 0;">${latestEmail.date || 'N/A'}</p>
-                    </div>
-                `;
-            }
+            const ctx = document.getElementById('activityBarChart').getContext('2d');
             
-            dashboardSummary.innerHTML = html;
+            window.activityChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['📧 Emails', '📄 Fichiers', '🔗 URLs', '🖥️ IPs'],
+                    datasets: [{
+                        data: [totals.emails, totals.attachments, totals.urls, totals.ips],
+                        backgroundColor: [
+                            'rgba(147, 112, 219, 0.7)',
+                            'rgba(52, 152, 219, 0.7)',
+                            'rgba(46, 204, 113, 0.7)',
+                            'rgba(230, 126, 34, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(147, 112, 219, 1)',
+                            'rgba(52, 152, 219, 1)',
+                            'rgba(46, 204, 113, 1)',
+                            'rgba(230, 126, 34, 1)'
+                        ],
+                        borderWidth: 2,
+                        borderRadius: 8,
+                        hoverBackgroundColor: [
+                            'rgba(147, 112, 219, 0.9)',
+                            'rgba(52, 152, 219, 0.9)',
+                            'rgba(46, 204, 113, 0.9)',
+                            'rgba(230, 126, 34, 0.9)'
+                        ]
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(10, 14, 39, 0.9)',
+                            titleColor: '#f8fafc',
+                            bodyColor: '#cbd5e1',
+                            borderColor: 'rgba(14, 165, 233, 0.3)',
+                            borderWidth: 1,
+                            padding: 12,
+                            callbacks: {
+                                title: function(context) {
+                                    return context[0].label;
+                                },
+                                label: function(context) {
+                                    return context.parsed.x + ' analyses';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(52, 73, 94, 0.3)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#94a3b8',
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        y: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#cbd5e1',
+                                font: {
+                                    size: 13,
+                                    weight: '500'
+                                }
+                            }
+                        }
+                    },
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeInOutQuart'
+                    }
+                }
+            });
         })
         .catch(err => {
             console.error('Dashboard load error:', err);
             dashboardSummary.innerHTML = `
                 <div style="text-align:center; padding:40px; color:var(--danger);">
                     <i class="fa-solid fa-triangle-exclamation" style="font-size:2rem; margin-bottom:10px;"></i>
-                    <p>Erreur lors du chargement du résumé</p>
+                    <p>Erreur lors du chargement du graphique</p>
                 </div>
             `;
         });

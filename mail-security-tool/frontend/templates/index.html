@@ -10,6 +10,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for Pie Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -68,9 +70,6 @@
                     <h1 id="active-tab-title">Inspecteur d'Email</h1>
                     <p id="active-tab-desc">Parse automatiquement les en-têtes SPF, DKIM, DMARC et analyse les IPs</p>
                 </div>
-                <div class="user-profile">
-                    <div class="avatar"><i class="fa-solid fa-user-astronaut"></i></div>
-                </div>
             </header>
 
             <div class="content-wrapper">
@@ -111,22 +110,17 @@
                                 <i class="fa-solid fa-server"></i>
                                 <span>Analyse IP</span>
                             </div>
-                            
                         </div>
                     </div>
                     
-                    <!-- Statistics Section -->
+                    <!-- Statistics Section with Histogram -->
                     <div class="card glass-card">
                         <div class="history-header">
-                            <h3><i class="fa-solid fa-chart-line"></i> Résumé d'Activité</h3>
+                            <h3><i class="fa-solid fa-chart-bar"></i> Résumé d'Activité</h3>
                             <button class="btn btn-icon" onclick="loadDashboard()"><i class="fa-solid fa-rotate-right"></i></button>
                         </div>
-                        <div id="dashboardSummary" class="dashboard-content">
-                            <div class="dashboard-empty-state">
-                                <i class="fa-solid fa-inbox"></i>
-                                <p>Aucune analyse pour le moment</p>
-                                <p style="font-size:0.9rem;">Vos analyses apparaîtront ici</p>
-                            </div>
+                        <div id="dashboardSummary" class="dashboard-content" style="display: flex; flex-direction: column; gap: 20px;">
+                            <canvas id="activityBarChart" style="max-height: 300px;"></canvas>
                         </div>
                     </div>
                 </section>

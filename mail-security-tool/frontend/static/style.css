@@ -68,6 +68,7 @@ html, body {
     width: 100%;
     height: 100%;
     overflow: hidden;
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><defs><style>.cursor-outer{fill:none;stroke:%230ea5e9;stroke-width:2;}.cursor-inner{fill:%230ea5e9;}</style></defs><circle class="cursor-outer" cx="16" cy="16" r="6"/><circle class="cursor-inner" cx="16" cy="16" r="2"/><line x1="16" y1="2" x2="16" y2="8" stroke="%230ea5e9" stroke-width="1.5"/><line x1="16" y1="24" x2="16" y2="30" stroke="%230ea5e9" stroke-width="1.5"/><line x1="2" y1="16" x2="8" y2="16" stroke="%230ea5e9" stroke-width="1.5"/><line x1="24" y1="16" x2="30" y2="16" stroke="%230ea5e9" stroke-width="1.5"/></svg>') 16 16, auto;
 }
 
 body {
@@ -87,10 +88,25 @@ body::before {
     position: fixed;
     inset: 0;
     pointer-events: none;
-    background-image: linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-    background-size: 72px 72px;
-    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 80%);
-    opacity: 0.5;
+    background-image: 
+        linear-gradient(rgba(14, 165, 233, 0.15) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(14, 165, 233, 0.15) 1px, transparent 1px),
+        linear-gradient(rgba(124, 58, 237, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124, 58, 237, 0.08) 1px, transparent 1px);
+    background-size: 60px 60px, 60px 60px, 120px 120px, 120px 120px;
+    background-position: 0 0, 0 0, 30px 30px, 30px 30px;
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.3) 50%, transparent 100%);
+    opacity: 0.6;
+    animation: gridPulse 8s ease-in-out infinite;
+}
+
+@keyframes gridPulse {
+    0%, 100% {
+        opacity: 0.6;
+    }
+    50% {
+        opacity: 0.8;
+    }
 }
 
 body::after {
@@ -197,7 +213,7 @@ body::after {
     font-family: var(--font-sans);
     font-weight: 500;
     font-size: 0.95rem;
-    cursor: pointer;
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6" fill="none" stroke="%230ea5e9" stroke-width="1.5"/><circle cx="10" cy="10" r="2" fill="%230ea5e9"/></svg>') 10 10, pointer;
     text-align: left;
     transition: var(--transition);
     position: relative;
@@ -425,10 +441,8 @@ body::after {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     position: relative;
     overflow: hidden;
-}
-
-.glass-card {
     transition: var(--transition);
+    animation: borderNeonFlow 8s ease-in-out infinite;
 }
 
 .glass-card:hover {
@@ -441,6 +455,7 @@ body::after {
     padding: 48px 40px;
     text-align: center;
     background: linear-gradient(135deg, rgba(14, 165, 233, 0.05) 0%, rgba(124, 58, 237, 0.03) 100%);
+    animation: neonGlowPulse 4s ease-in-out infinite;
 }
 
 .dashboard-hero-icon {
@@ -665,6 +680,7 @@ body::after {
     font-size: 1rem;
     font-family: var(--font-sans);
     transition: var(--transition);
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><line x1="2" y1="4" x2="2" y2="16" stroke="%230ea5e9" stroke-width="1.5" stroke-linecap="round"/><polyline points="5 4 5 16 18 10 5 4" fill="none" stroke="%230ea5e9" stroke-width="1.5" stroke-linejoin="round"/></svg>') 10 10, text;
 }
 
 .text-input:focus {
@@ -724,7 +740,7 @@ body::after {
     font-family: var(--font-sans);
     font-weight: 700;
     font-size: 0.95rem;
-    cursor: pointer;
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><defs><style>.cursor-pointer{fill:none;stroke:%230ea5e9;stroke-width:2;stroke-linecap:round;}</style></defs><polygon class="cursor-pointer" points="6 4 14 12 6 20 6 4"/><circle cx="18" cy="12" r="2" fill="%230ea5e9"/></svg>') 12 12, pointer;
     transition: var(--transition-fast);
     border: none;
     letter-spacing: 0.5px;
@@ -838,13 +854,76 @@ body::after {
     100% { transform: rotate(360deg); }
 }
 
+/* Dynamic Neon Animations */
+@keyframes neonGlowPulse {
+    0%, 100% {
+        text-shadow: 0 0 8px rgba(14, 165, 233, 0.3),
+                     0 0 16px rgba(14, 165, 233, 0.15),
+                     0 0 24px rgba(124, 58, 237, 0.1);
+        box-shadow: 0 0 8px rgba(14, 165, 233, 0.3),
+                    0 0 16px rgba(14, 165, 233, 0.15);
+    }
+    50% {
+        text-shadow: 0 0 16px rgba(14, 165, 233, 0.6),
+                     0 0 32px rgba(14, 165, 233, 0.3),
+                     0 0 48px rgba(124, 58, 237, 0.2);
+        box-shadow: 0 0 16px rgba(14, 165, 233, 0.6),
+                    0 0 32px rgba(14, 165, 233, 0.3);
+    }
+}
+
+@keyframes neonFlicker {
+    0%, 10%, 20%, 30%, 100% {
+        opacity: 1;
+        text-shadow: 0 0 6px rgba(14, 165, 233, 0.4),
+                     0 0 12px rgba(124, 58, 237, 0.2);
+    }
+    5%, 15%, 25% {
+        opacity: 0.7;
+        text-shadow: 0 0 2px rgba(14, 165, 233, 0.2);
+    }
+}
+
+@keyframes borderNeonFlow {
+    0% {
+        border-color: rgba(14, 165, 233, 0.3);
+        box-shadow: inset 0 0 12px rgba(14, 165, 233, 0.1),
+                    0 0 12px rgba(14, 165, 233, 0.1);
+    }
+    50% {
+        border-color: rgba(14, 165, 233, 0.8);
+        box-shadow: inset 0 0 20px rgba(14, 165, 233, 0.2),
+                    0 0 20px rgba(14, 165, 233, 0.3),
+                    0 0 30px rgba(124, 58, 237, 0.15);
+    }
+    100% {
+        border-color: rgba(124, 58, 237, 0.3);
+        box-shadow: inset 0 0 12px rgba(124, 58, 237, 0.1),
+                    0 0 12px rgba(124, 58, 237, 0.1);
+    }
+}
+
+@keyframes gridShift {
+    0%, 100% {
+        background-position: 0 0, 0 0, 30px 30px, 30px 30px;
+    }
+    50% {
+        background-position: 2px 2px, 2px 2px, 32px 32px, 32px 32px;
+    }
+}
+
+/* Apply animations to elements */
+body::before {
+    animation: gridPulse 8s ease-in-out infinite, gridShift 12s ease-in-out infinite;
+}
+
 .result-card {
     background: var(--bg-card);
     border: 1px solid rgba(14, 165, 233, 0.12);
     border-radius: 14px;
     overflow: hidden;
     margin-bottom: 28px;
-    animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1), borderNeonFlow 6s ease-in-out infinite;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     position: relative;
 }
